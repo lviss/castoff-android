@@ -28,3 +28,17 @@ jobs:
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Set build identifier
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: >-
+            debug-apk-${{ github.event.pull_request.number
+            && format('pr{0}', github.event.pull_request.number)
+            || 'main' }}-${{ steps.vars.outputs.sha_short }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

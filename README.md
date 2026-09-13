@@ -113,7 +113,9 @@ hardware.
 No release signing is set up yet (see below), so the only way to install this today is a debug
 build: `./gradlew installDebug` with a device/emulator connected via `adb`, or copying
 `app-debug.apk` over and installing it directly (enable "install unknown apps" for whichever app
-you use to open it).
+you use to open it). CI (`.github/workflows/ci.yml`) also builds a debug APK on every PR and on
+push to `main`, and uploads it as a workflow run artifact -- see the "Artifacts" section at the
+bottom of the run's summary page on GitHub Actions.
 
 ## Not yet implemented (follow-up work)
 
