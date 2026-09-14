@@ -70,13 +70,13 @@ class MainActivity : ComponentActivity() {
                     // FCastClient's short-lived per-command ones.
                     LaunchedEffect(Unit) {
                         hostSettings.hostFlow.collectLatest { host ->
-                            if (!host.isConfigured) return@collectLatest
                             anchor = null
                             uiState = uiState.copy(
                                 isPlaying = false,
                                 positionSeconds = null,
                                 durationSeconds = null,
                             )
+                            if (!host.isConfigured) return@collectLatest
                             FCastStatusListener(host.address, host.port).playbackUpdates().collect { update ->
                                 val playing = PlaybackState.fromInt(update.state) == PlaybackState.PLAYING
                                 anchor = if (playing) {
