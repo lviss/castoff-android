@@ -102,7 +102,7 @@ fun ControlScreen(
             }
 
             val duration = state.durationSeconds
-            if (state.isPlaying && duration != null && duration > 0f) {
+            if (duration != null && duration > 0f) {
                 val position = (state.positionSeconds ?: 0f).coerceIn(0f, duration)
                 Slider(
                     value = position,

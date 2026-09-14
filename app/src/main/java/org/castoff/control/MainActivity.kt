@@ -134,7 +134,10 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 val result = if (nowPlaying) client.resume() else client.pause()
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(isPlaying = nowPlaying, statusMessage = null) },
+                                    onSuccess = {
+                                        anchor = null
+                                        uiState.copy(isPlaying = nowPlaying, statusMessage = null)
+                                    },
                                     onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
                                 )
                             }
@@ -144,7 +147,10 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 val result = client.stop()
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(isPlaying = false, statusMessage = null) },
+                                    onSuccess = {
+                                        anchor = null
+                                        uiState.copy(isPlaying = false, statusMessage = null)
+                                    },
                                     onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
                                 )
                             }
