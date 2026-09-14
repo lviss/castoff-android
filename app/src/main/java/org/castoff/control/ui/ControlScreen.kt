@@ -31,6 +31,10 @@ data class ControlUiState(
     val isPlaying: Boolean,
     val volume: Float,
     val statusMessage: String?,
+    /** Last known/interpolated playback position, from daemon-pushed `PlaybackUpdate`s. */
+    val positionSeconds: Float? = null,
+    /** Last known playback duration, from daemon-pushed `PlaybackUpdate`s. */
+    val durationSeconds: Float? = null,
 )
 
 @Composable
@@ -96,6 +100,22 @@ fun ControlScreen(
                     Text("  Stop")
                 }
             }
+
+            val duration = state.durationSeconds
+            if (duration != null && duration > 0f) {
+                val position = (state.positionSeconds ?: 0f).coerceIn(0f, duration)
+                Slider(
+                    value = position,
+                    onValueChange = {},
+                    valueRange = 0f..duration,
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = "${formatPlaybackTime(position)} / ${formatPlaybackTime(duration)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -118,4 +138,11 @@ fun ControlScreen(
             Text(text = message, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+private fun formatPlaybackTime(seconds: Float): String {
+    val total = seconds.toInt().coerceAtLeast(0)
+    val minutes = total / 60
+    val secs = total % 60
+    return "%d:%02d".format(minutes, secs)
 }

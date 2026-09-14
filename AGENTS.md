@@ -9,7 +9,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   daemon side (new opcode, changed field) has to be re-read and re-applied here manually — there is
   no automated sync or contract test between the repos.
 - `FCastClient` opens a new short-lived TCP connection per command rather than holding one open
-  across the app's lifecycle; see the class doc comment in `FCastClient.kt` for why.
+  across the app's lifecycle; see the class doc comment in `FCastClient.kt` for why. A separate
+  `FCastStatusListener` (same package) holds one persistent, read-only connection open instead,
+  because the daemon's unprompted `PlaybackUpdate` pushes can arrive at any time and would never
+  be seen on a connection that's already closed by the time they land -- don't "fix" `FCastClient`
+  into holding a connection open; add to `FCastStatusListener` instead.
 - On NixOS (not GitHub Actions' Ubuntu runners), AAPT2's prebuilt binary won't run under the
   standard dynamic linker (`nix.dev/permalink/stub-ld`). Building locally under Nix needs an
   `-Pandroid.aapt2FromMavenOverride=<path to a wrapper named literally "aapt2">` pointing at a

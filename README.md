@@ -16,11 +16,14 @@ external wire protocol, not something that needs monorepo coupling, and the tool
 - A control screen: resume/pause toggle, stop, and a volume slider, all sent as FCast commands to
   a TV box at a host/port you type in once (persisted locally). No mDNS/auto-discovery yet -- see
   below.
+- A live playback progress bar on that screen, fed by `PlaybackUpdate` frames the daemon pushes
+  over a persistent connection and interpolated locally between pushes, so it advances
+  continuously rather than once a second. It's read-only for now -- seeking isn't wired up.
 - A Share-intent receiver: sharing a link (e.g. a YouTube video's "Share" -> "Castoff Control")
   sends an FCast `Play` with that URL to the configured TV box. This is the real Android share
   sheet path, not just something reachable programmatically.
 
-That's it: no media browsing, no Jellyfin, no playback status/progress display. See
+That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist/artwork). See
 [Not yet implemented](#not-yet-implemented-follow-up-work) below for what's planned but not built.
 
 ## What's here
@@ -28,8 +31,10 @@ That's it: no media browsing, no Jellyfin, no playback status/progress display. 
 - **`app/`** -- a standard Gradle/Kotlin Android app module, UI built with Jetpack Compose
   (Material 3).
 - **`app/src/main/java/org/castoff/control/fcast/`** -- the FCast v2 client: wire framing
-  (`FCastFrame.kt`), message types (`Messages.kt`, `Opcode.kt`), and a small TCP sender
-  (`FCastClient.kt`).
+  (`Frame.kt`), message types (`Messages.kt`, `Opcode.kt`), a small per-command TCP sender
+  (`FCastClient.kt`), a persistent read-only connection that receives daemon-pushed
+  `PlaybackUpdate` frames (`FCastStatusListener.kt`), and the local position-interpolation rule
+  (`PlaybackPosition.kt`).
 - **`app/src/main/java/org/castoff/control/settings/`** -- `HostSettings.kt`, a DataStore-backed
   store for the user-configured TV box host/port.
 - **`app/src/main/java/org/castoff/control/ui/`** -- the Compose control screen.
@@ -68,6 +73,11 @@ Opcodes this client sends:
 `Seek`, `SetSpeed`, `Version`, and `Ping` are decoded on the wire-format level (see `Opcode.kt`)
 but not yet wired to any UI action.
 
+In the other direction, the client receives the daemon's `PlaybackUpdate` (6) pushes on a
+persistent connection (`FCastStatusListener`) and uses them to drive the progress display above;
+`VolumeUpdate` (7) and `PlaybackError` (9) are decoded on the wire-format level but not acted on
+yet.
+
 ## Building and running
 
 ### Requirements
@@ -78,7 +88,7 @@ but not yet wired to any UI action.
 ### Build and test from the command line
 
 ```sh
-./gradlew test          # unit tests (FCast framing + message serialization)
+./gradlew test          # unit tests (FCast framing, messages, playback interpolation)
 ./gradlew assembleDebug  # builds app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -95,7 +105,8 @@ The easiest way to see it working end-to-end without hardware:
    Save.
 4. Tap Resume/Pause/Stop or drag the volume slider -- each sends an FCast frame to the daemon; the
    daemon needs something already loaded (via `Play`) for Resume/Pause/Stop to have an audible
-   effect.
+   effect. Once something is playing, a progress bar with elapsed/total time appears and ticks
+   forward from the daemon's `PlaybackUpdate` pushes.
 5. To test the share path: share a URL to a media file (e.g. long-press a link and choose "Share",
    or share from a browser/YouTube) and pick "Castoff Control" from the share sheet. That sends
    `Play` with that URL.
@@ -127,9 +138,9 @@ Out of scope for this scaffold, deliberately:
   next step, not done here.
 - **Jellyfin-specific UI.** The daemon doesn't speak Jellyfin yet either -- this app only ever
   sends a bare `url`.
-- **Media browsing** beyond basic transport controls: no library, no queue, no now-playing
-  metadata/progress display (the daemon's `PlaybackUpdate`/`VolumeUpdate` replies are decoded but
-  not surfaced anywhere in the UI yet).
+- **Media browsing** beyond basic transport controls: no library, no queue, and no now-playing
+  metadata (title/artist/artwork). Playback progress is shown now, but the volume slider is still
+  local-only and doesn't reflect the daemon's `VolumeUpdate`.
 - **App signing/release configuration.** Debug builds only; no keystore, no Play Store or F-Droid
   packaging.
 - Anything to do with the daemon repo itself -- this app only ever talks to it over FCast.
