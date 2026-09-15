@@ -5,15 +5,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.castoff.control.fcast.FCastClient
@@ -22,9 +27,11 @@ import org.castoff.control.fcast.PlaybackAnchor
 import org.castoff.control.fcast.PlaybackDisplay
 import org.castoff.control.fcast.PlaybackReport
 import org.castoff.control.fcast.PlaybackState
+import org.castoff.control.fcast.StatusEvent
 import org.castoff.control.fcast.interpolatePosition
 import org.castoff.control.fcast.playbackDisplayFor
 import org.castoff.control.settings.HostSettings
+import org.castoff.control.ui.ConnectionStatus
 import org.castoff.control.ui.ControlScreen
 import org.castoff.control.ui.ControlUiState
 import org.castoff.control.ui.theme.CastoffControlTheme
@@ -55,6 +62,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // The persisted host the status connection follows. A new
+                    // emission (i.e. every Save) restarts the connection below.
+                    val savedHost by hostSettings.hostFlow.collectAsState(initial = null)
+
                     LaunchedEffect(Unit) {
                         val saved = hostSettings.current()
                         uiState = uiState.copy(
@@ -63,8 +74,18 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Anchor for interpolating the displayed position between pushed updates;
-                    // null while not playing (see PlaybackAnchor's doc for why).
+                    // What the status link is doing, so the screen can always say.
+                    // Starts out "connecting" rather than "not connected" because
+                    // the persisted host has not been read yet.
+                    var connection by remember { mutableStateOf(ConnectionStatus.connecting("", 0)) }
+
+                    // Bumped to force a fresh connection: the manual Connect
+                    // button, and every return to the foreground (see below).
+                    var reconnectToken by remember { mutableIntStateOf(0) }
+
+                    // Anchor for interpolating the displayed position between pushed
+                    // updates; null while not playing *or* while the link is down (see
+                    // PlaybackAnchor's doc and the Disconnected branch below).
                     var anchor by remember { mutableStateOf<PlaybackAnchor?>(null) }
 
                     fun currentPlaybackDisplay() = PlaybackDisplay(
@@ -85,31 +106,85 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Persistent status connection: restarts on every hostFlow emission, i.e.
-                    // once a host is saved and again on each subsequent save -- see
-                    // FCastStatusListener's doc for why this is a separate connection from
-                    // FCastClient's short-lived per-command ones.
-                    LaunchedEffect(Unit) {
-                        hostSettings.hostFlow.collectLatest { host ->
-                            // Reset unconditionally (even when the new host is unconfigured), so
-                            // switching/clearing the TV never leaves the previous host's stale
-                            // playback state displayed.
-                            applyPlaybackDisplay(playbackDisplayFor(state = null))
-                            if (!host.isConfigured) return@collectLatest
-                            FCastStatusListener(host.address, host.port).playbackUpdates().collect { update ->
-                                applyPlaybackDisplay(
-                                    playbackDisplayFor(
-                                        state = PlaybackState.fromInt(update.state) ?: PlaybackState.IDLE,
-                                        current = currentPlaybackDisplay(),
-                                        report = PlaybackReport(
-                                            timeSeconds = update.time,
-                                            durationSeconds = update.duration,
-                                            speed = update.speed,
-                                        ),
+                    // Persistent status connection. Restarts on a new saved host
+                    // (every Save) and on reconnectToken (manual Connect, or a return
+                    // to the foreground). Each restart begins from "we know nothing
+                    // about playback yet" rather than showing the previous link's
+                    // state, because the daemon does not send its current status on
+                    // connect -- see FCastStatusListener's doc.
+                    LaunchedEffect(savedHost, reconnectToken) {
+                        val host = savedHost
+                        if (host == null || !host.isConfigured) {
+                            connection = ConnectionStatus.notConfigured
+                            anchor = null
+                            uiState = uiState.copy(
+                                isPlaying = false,
+                                positionSeconds = null,
+                                durationSeconds = null,
+                                hasPlaybackReport = false,
+                            )
+                            return@LaunchedEffect
+                        }
+
+                        anchor = null
+                        uiState = uiState.copy(hasPlaybackReport = false)
+                        connection = ConnectionStatus.connecting(host.address, host.port)
+
+                        FCastStatusListener(host.address, host.port).events().collect { event ->
+                            when (event) {
+                                StatusEvent.Connecting ->
+                                    connection = ConnectionStatus.connecting(host.address, host.port)
+
+                                StatusEvent.Connected ->
+                                    connection = ConnectionStatus.connected(host.address, host.port)
+
+                                is StatusEvent.Disconnected -> {
+                                    connection = ConnectionStatus.notConnected(
+                                        host.address,
+                                        host.port,
+                                        event.reason,
                                     )
-                                )
+                                    // Stop interpolating: a dead link must not keep
+                                    // marching the progress bar forward off a stale
+                                    // anchor as if playback were being watched live.
+                                    anchor = null
+                                }
+
+                                is StatusEvent.Playback -> {
+                                    uiState = uiState.copy(hasPlaybackReport = true)
+                                    applyPlaybackDisplay(
+                                        playbackDisplayFor(
+                                            state = PlaybackState.fromInt(event.update.state)
+                                                ?: PlaybackState.IDLE,
+                                            current = currentPlaybackDisplay(),
+                                            report = PlaybackReport(
+                                                timeSeconds = event.update.time,
+                                                durationSeconds = event.update.duration,
+                                                speed = event.update.speed,
+                                            ),
+                                        )
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    // Auto-connect on returning to the foreground. A socket the OS
+                    // killed while the app was backgrounded can sit half-open, so the
+                    // app's own "still connected" belief can't be trusted on resume:
+                    // replace the link unconditionally instead of waiting out the
+                    // listener's liveness timeout. Skipped on the first ON_START
+                    // because the effect above already connects on composition.
+                    val lifecycleOwner = LocalLifecycleOwner.current
+                    var seenFirstStart by remember { mutableStateOf(false) }
+                    DisposableEffect(lifecycleOwner) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_START) {
+                                if (seenFirstStart) reconnectToken++ else seenFirstStart = true
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                     }
 
                     // Ticks the displayed position between pushed updates; restarts (or stops,
@@ -140,6 +215,8 @@ class MainActivity : ComponentActivity() {
 
                     ControlScreen(
                         state = uiState,
+                        connection = connection,
+                        onConnect = { reconnectToken++ },
                         onHostAddressChange = { uiState = uiState.copy(hostAddress = it) },
                         onHostPortChange = { uiState = uiState.copy(hostPort = it.filter(Char::isDigit)) },
                         onSaveHost = {
