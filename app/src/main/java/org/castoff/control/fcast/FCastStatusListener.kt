@@ -74,6 +74,11 @@ sealed interface StatusEvent {
  * class body *requires* [livenessTimeoutMs] to exceed [heartbeatIntervalMs]
  * for the same reason. AGENTS.md records why this heartbeat, rather than a
  * plain read timeout, is what makes "connected" honest.
+ *
+ * FCast v2 has no connect-time "what is your current state?" request: a
+ * freshly connected collector learns nothing about playback until the daemon
+ * next pushes a state change (or, while playing, its ~1/s tick), so callers
+ * must treat a new connection as "playback state unknown", never "idle".
  */
 class FCastStatusListener(
     private val host: String,

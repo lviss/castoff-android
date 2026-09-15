@@ -1,6 +1,6 @@
 package org.castoff.control.ui
 
-/** Which of the three things the user needs to know the status connection is doing. */
+/** The user-visible states of the status connection, as the control screen reports them. */
 enum class ConnectionPhase {
     /** No TV box configured yet: there is nothing to connect to. */
     NOT_CONFIGURED,
