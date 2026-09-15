@@ -132,8 +132,17 @@ class MainActivity : ComponentActivity() {
 
                         FCastStatusListener(host.address, host.port).events().collect { event ->
                             when (event) {
-                                StatusEvent.Connecting ->
+                                StatusEvent.Connecting -> {
+                                    // A fresh link (including the listener's own
+                                    // automatic retry): nothing is known about its
+                                    // playback yet, so drop any state carried over
+                                    // from the previous connection rather than
+                                    // rendering it as live. The last known position
+                                    // stays frozen and will be labelled as such.
+                                    anchor = null
+                                    uiState = uiState.copy(hasPlaybackReport = false)
                                     connection = ConnectionStatus.connecting(host.address, host.port)
+                                }
 
                                 StatusEvent.Connected ->
                                     connection = ConnectionStatus.connected(host.address, host.port)

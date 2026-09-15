@@ -121,7 +121,19 @@ class FCastStatusListener(
                         while (isActive) {
                             delay(heartbeatIntervalMs)
                             if (System.nanoTime() - lastHeardNanos.get() >= heartbeatIntervalMs * 1_000_000) {
-                                FCastFrame.write(output, Opcode.PING)
+                                try {
+                                    FCastFrame.write(output, Opcode.PING)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    // A failed write means the link is gone. Close the
+                                    // socket so the reader's blocking read surfaces it
+                                    // on the same reported-disconnect-and-retry path as
+                                    // any other connection error, instead of this child
+                                    // coroutine's failure cancelling the whole flow.
+                                    runCatching { socket.close() }
+                                    break
+                                }
                             }
                         }
                     }
