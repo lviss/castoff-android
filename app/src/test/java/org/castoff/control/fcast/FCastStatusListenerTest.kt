@@ -168,7 +168,7 @@ class FCastStatusListenerTest {
         }
 
         val collected = mutableListOf<StatusEvent>()
-        val collectJob = launch { listenerFor(server, livenessTimeoutMs = 600, heartbeatIntervalMs = 200).events().collect { collected.add(it) } }
+        val collectJob = launch { listenerFor(server, livenessTimeoutMs = 300, heartbeatIntervalMs = 200).events().collect { collected.add(it) } }
         // Long enough for several heartbeats at this cadence: without the
         // heartbeat the read timeout would have fired by now.
         delay(1500)

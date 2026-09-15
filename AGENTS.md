@@ -19,10 +19,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   (1) it is opened on composition with a saved host and **replaced on every return to the
   foreground** (`MainActivity`'s `ON_START` observer bumps a reconnect token) -- a socket Android
   killed while the app was backgrounded can sit half-open, so "still connected" can't be trusted
-  on resume; (2) it sends a `Ping` heartbeat whenever it has heard nothing for a while, because
+  on resume; (2) it sends a `Ping` heartbeat on a fixed cadence, because
   the daemon pushes **nothing at all** while idle/paused and nothing at connect time, so silence
   alone is *not* evidence of a dead link -- a plain read timeout would either flicker "not
-  connected" on an idle daemon or never notice a real drop; (3) the playback anchor is cleared
+  connected" on an idle daemon or never notice a real drop. The cadence is deliberately not gated
+  on silence (a gate keyed on the last received frame is reset by the `Pong` it just triggered and
+  then skips a beat), and `FCastStatusListener` requires the read timeout to exceed the interval;
+  (3) the playback anchor is cleared
   whenever the link drops, so the local interpolation ticker cannot keep marching the progress bar
   forward from a stale anchor and claim live playback on a dead link.
 - FCast v2 (and this daemon) has no connect-time "what is your current state?" request, so a

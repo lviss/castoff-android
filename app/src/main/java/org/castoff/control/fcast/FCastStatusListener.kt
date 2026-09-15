@@ -7,7 +7,6 @@ import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -63,14 +62,18 @@ sealed interface StatusEvent {
  *
  * The connection carries a heartbeat: the daemon sends nothing at all while
  * idle or paused, so silence on its own cannot be told apart from a link the
- * OS silently killed (a backgrounded app's socket, a Wi-Fi transition). While
- * nothing has been heard for [heartbeatIntervalMs] the listener sends the
- * protocol's own `Ping` and expects the daemon's `Pong`; a `Ping` that goes
- * unanswered past [livenessTimeoutMs] is treated exactly like any other
- * connection error, so a dead link becomes a reported [StatusEvent.Disconnected]
- * instead of an indefinitely "connected" stale screen. AGENTS.md records why
- * this heartbeat, rather than a plain read timeout, is what makes "connected"
- * honest.
+ * OS silently killed (a backgrounded app's socket, a Wi-Fi transition). Every
+ * [heartbeatIntervalMs] the listener sends the protocol's own `Ping`, and the
+ * daemon's `Pong` keeps the reader's [livenessTimeoutMs] deadline from
+ * expiring on an idle-but-healthy link; a link that stops answering is treated
+ * exactly like any other connection error, so it becomes a reported
+ * [StatusEvent.Disconnected] instead of an indefinitely "connected" stale
+ * screen. The cadence is fixed rather than gated on silence, because a gate
+ * that keys off the last received frame is reset by the very `Pong` it caused
+ * and then skips a beat, letting the read timeout fire between Pongs; the
+ * class body *requires* [livenessTimeoutMs] to exceed [heartbeatIntervalMs]
+ * for the same reason. AGENTS.md records why this heartbeat, rather than a
+ * plain read timeout, is what makes "connected" honest.
  */
 class FCastStatusListener(
     private val host: String,
@@ -83,6 +86,13 @@ class FCastStatusListener(
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    init {
+        require(livenessTimeoutMs.toLong() > heartbeatIntervalMs) {
+            "livenessTimeoutMs ($livenessTimeoutMs) must exceed heartbeatIntervalMs " +
+                "($heartbeatIntervalMs) so the reader's deadline cannot expire between heartbeats"
+        }
+    }
 
     /**
      * Emits the connection's lifecycle ([StatusEvent.Connecting] -> [StatusEvent.Connected]
@@ -116,24 +126,21 @@ class FCastStatusListener(
                     backoffMs = initialBackoffMs
                     socket.soTimeout = livenessTimeoutMs
                     val output = socket.getOutputStream()
-                    val lastHeardNanos = AtomicLong(System.nanoTime())
                     heartbeatJob = launch(Dispatchers.IO) {
                         while (isActive) {
                             delay(heartbeatIntervalMs)
-                            if (System.nanoTime() - lastHeardNanos.get() >= heartbeatIntervalMs * 1_000_000) {
-                                try {
-                                    FCastFrame.write(output, Opcode.PING)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    // A failed write means the link is gone. Close the
-                                    // socket so the reader's blocking read surfaces it
-                                    // on the same reported-disconnect-and-retry path as
-                                    // any other connection error, instead of this child
-                                    // coroutine's failure cancelling the whole flow.
-                                    runCatching { socket.close() }
-                                    break
-                                }
+                            try {
+                                FCastFrame.write(output, Opcode.PING)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                // A failed write means the link is gone. Close the
+                                // socket so the reader's blocking read surfaces it
+                                // on the same reported-disconnect-and-retry path as
+                                // any other connection error, instead of this child
+                                // coroutine's failure cancelling the whole flow.
+                                runCatching { socket.close() }
+                                break
                             }
                         }
                     }
@@ -142,9 +149,6 @@ class FCastStatusListener(
                     val input = socket.getInputStream()
                     while (true) {
                         val frame = FCastFrame.read(input) ?: break
-                        // Any frame proves the link is alive, including the Pong
-                        // that answers a heartbeat.
-                        lastHeardNanos.set(System.nanoTime())
                         if (frame.opcode == Opcode.PLAYBACK_UPDATE) {
                             emit(
                                 StatusEvent.Playback(
@@ -197,8 +201,19 @@ class FCastStatusListener(
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 5000
+
+        /**
+         * The reader's per-read deadline on an established link, and the fixed
+         * cadence at which the heartbeat sends `Ping`. Every `Ping` elicits a
+         * `Pong` that resets the deadline on an otherwise silent link, so the
+         * cadence must be strictly shorter than the deadline; the `require` in
+         * the class body enforces that instead of relying on two independent
+         * literals staying in sync. Both stay in the low tens of seconds so a
+         * genuinely dead link is still detected promptly.
+         */
         const val LIVENESS_TIMEOUT_MS = 15_000
         const val HEARTBEAT_INTERVAL_MS = 10_000L
+
         const val INITIAL_BACKOFF_MS = 1000L
         const val MAX_BACKOFF_MS = 15_000L
     }

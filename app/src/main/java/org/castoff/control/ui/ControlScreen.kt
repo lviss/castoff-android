@@ -142,10 +142,12 @@ fun ControlScreen(
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-            } else if (state.isPlaying) {
+            } else if (state.isPlaying && state.hasPlaybackReport) {
                 // Honest middle ground: the daemon says something is playing but
                 // has not reported a timeline (a web page has none, and mpv takes a
                 // moment to resolve one), so show that rather than an empty area.
+                // Gated on hasPlaybackReport so an optimistic local Resume cannot
+                // make this claim on behalf of a daemon that has said nothing.
                 Text(
                     text = "Playing — the daemon hasn't reported a duration yet",
                     style = MaterialTheme.typography.bodySmall,

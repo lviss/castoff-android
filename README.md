@@ -76,7 +76,7 @@ Opcodes this client sends:
 | `Pause` (2) / `Resume` (3) | the control screen's play/pause toggle |
 | `Stop` (4) | the control screen's stop button |
 | `SetVolume` (8) | the control screen's volume slider |
-| `Ping` (12) | the status connection's heartbeat: only while it has heard nothing for a while, to tell an idle daemon apart from a dead link |
+| `Ping` (12) | the status connection's heartbeat, sent on a fixed cadence to tell an idle daemon apart from a dead link |
 
 `Seek`, `SetSpeed`, and `Version` are decoded on the wire-format level (see `Opcode.kt`)
 but not yet wired to any UI action.
