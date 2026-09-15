@@ -106,6 +106,17 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // A link that is not up (a fresh attempt, or one that dropped)
+                    // cannot speak for current playback: stop ticking and stop
+                    // claiming playback is in progress, while keeping the last known
+                    // position/duration frozen so they can still be shown as
+                    // "(last known)". Every such reset goes through here so the
+                    // sites can't drift apart again.
+                    fun resetLivePlayback() {
+                        anchor = null
+                        uiState = uiState.copy(isPlaying = false, hasPlaybackReport = false)
+                    }
+
                     // Persistent status connection. Restarts on a new saved host
                     // (every Save) and on reconnectToken (manual Connect, or a return
                     // to the foreground). Each restart begins from "we know nothing
@@ -116,31 +127,21 @@ class MainActivity : ComponentActivity() {
                         val host = savedHost
                         if (host == null || !host.isConfigured) {
                             connection = ConnectionStatus.notConfigured
-                            anchor = null
+                            resetLivePlayback()
                             uiState = uiState.copy(
-                                isPlaying = false,
                                 positionSeconds = null,
                                 durationSeconds = null,
-                                hasPlaybackReport = false,
                             )
                             return@LaunchedEffect
                         }
 
-                        anchor = null
-                        uiState = uiState.copy(hasPlaybackReport = false)
+                        resetLivePlayback()
                         connection = ConnectionStatus.connecting(host.address, host.port)
 
                         FCastStatusListener(host.address, host.port).events().collect { event ->
                             when (event) {
                                 StatusEvent.Connecting -> {
-                                    // A fresh link (including the listener's own
-                                    // automatic retry): nothing is known about its
-                                    // playback yet, so drop any state carried over
-                                    // from the previous connection rather than
-                                    // rendering it as live. The last known position
-                                    // stays frozen and will be labelled as such.
-                                    anchor = null
-                                    uiState = uiState.copy(hasPlaybackReport = false)
+                                    resetLivePlayback()
                                     connection = ConnectionStatus.connecting(host.address, host.port)
                                 }
 
@@ -153,10 +154,7 @@ class MainActivity : ComponentActivity() {
                                         host.port,
                                         event.reason,
                                     )
-                                    // Stop interpolating: a dead link must not keep
-                                    // marching the progress bar forward off a stale
-                                    // anchor as if playback were being watched live.
-                                    anchor = null
+                                    resetLivePlayback()
                                 }
 
                                 is StatusEvent.Playback -> {
