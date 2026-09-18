@@ -26,6 +26,9 @@ class FCastClient(private val host: String, private val port: Int = DEFAULT_PORT
 
     suspend fun stop(): Result<Frame?> = sendCommand(Opcode.STOP)
 
+    suspend fun seek(timeSeconds: Double): Result<Frame?> =
+        sendCommand(Opcode.SEEK, json.encodeToString(SeekMessage(time = timeSeconds)))
+
     suspend fun setVolume(volume: Double): Result<Frame?> =
         sendCommand(Opcode.SET_VOLUME, json.encodeToString(SetVolumeMessage(volume.coerceIn(0.0, 1.0))))
 

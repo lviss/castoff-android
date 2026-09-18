@@ -18,7 +18,9 @@ external wire protocol, not something that needs monorepo coupling, and the tool
   below.
 - A live playback progress bar on that screen, fed by `PlaybackUpdate` frames the daemon pushes
   over a persistent connection and interpolated locally between pushes, so it advances
-  continuously rather than once a second. It's read-only for now -- seeking isn't wired up.
+  continuously rather than once a second. Dragging it sends a `Seek` once the drag finishes
+  (not on every intermediate tick, the same pattern the volume slider already used), and shows
+  the dragged position rather than fighting the live interpolation while the drag is in progress.
 - A connection indicator on that screen that always says whether the app is talking to the TV
   box (connected / connecting / not connected), with the concrete reason when it isn't and a
   Connect button for the not-connected case. The status connection is opened automatically on
@@ -75,11 +77,12 @@ Opcodes this client sends:
 | `Play` (1) | a link is shared to this app via `ACTION_SEND` |
 | `Pause` (2) / `Resume` (3) | the control screen's play/pause toggle |
 | `Stop` (4) | the control screen's stop button |
+| `Seek` (5) | dragging the control screen's playback progress slider |
 | `SetVolume` (8) | the control screen's volume slider |
 | `Ping` (12) | the status connection's heartbeat, sent on a fixed cadence to tell an idle daemon apart from a dead link |
 
-`Seek`, `SetSpeed`, and `Version` are decoded on the wire-format level (see `Opcode.kt`)
-but not yet wired to any UI action.
+`SetSpeed` and `Version` are decoded on the wire-format level (see `Opcode.kt`) but not yet wired
+to any UI action.
 
 In the other direction, the client receives the daemon's `PlaybackUpdate` (6) pushes on a
 persistent connection (`FCastStatusListener`) and uses them to drive the progress display above;
@@ -116,7 +119,7 @@ The easiest way to see it working end-to-end without hardware:
 4. Tap Resume/Pause/Stop or drag the volume slider -- each sends an FCast frame to the daemon; the
    daemon needs something already loaded (via `Play`) for Resume/Pause/Stop to have an audible
    effect. Once something is playing, a progress bar with elapsed/total time appears and ticks
-   forward from the daemon's `PlaybackUpdate` pushes.
+   forward from the daemon's `PlaybackUpdate` pushes; dragging it sends a `Seek` once released.
 5. To test the share path: share a URL to a media file (e.g. long-press a link and choose "Share",
    or share from a browser/YouTube) and pick "Castoff Control" from the share sheet. That sends
    `Play` with that URL.
