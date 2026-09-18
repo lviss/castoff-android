@@ -42,8 +42,10 @@ data class ControlUiState(
     /**
      * Position the user is currently dragging the playback slider to, shown in
      * place of [positionSeconds] while non-null so the thumb doesn't fight the
-     * position ticking forward underneath the drag. Set on every drag tick,
-     * cleared once the drag finishes and the seek has been sent.
+     * position ticking forward underneath the drag. Set on every drag tick and
+     * cleared as soon as the drag finishes, even when no seek command is sent
+     * (e.g. an unparseable host field), so a dropped command can't leave the
+     * thumb frozen at the dragged position.
      */
     val seekPositionSeconds: Float? = null,
     /**
