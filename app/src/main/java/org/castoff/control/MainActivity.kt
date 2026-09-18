@@ -270,6 +270,20 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         },
+                        onSeek = { uiState = uiState.copy(seekPositionSeconds = it) },
+                        onSeekFinished = {
+                            val target = uiState.seekPositionSeconds
+                            uiState = uiState.copy(seekPositionSeconds = null)
+                            val client = clientOrNull() ?: return@ControlScreen
+                            if (target == null) return@ControlScreen
+                            scope.launch {
+                                val result = client.seek(target.toDouble())
+                                uiState = result.fold(
+                                    onSuccess = { uiState.copy(statusMessage = null) },
+                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                )
+                            }
+                        },
                         onVolumeChange = { uiState = uiState.copy(volume = it) },
                         onVolumeChangeFinished = {
                             val client = clientOrNull() ?: return@ControlScreen

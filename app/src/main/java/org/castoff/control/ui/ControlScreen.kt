@@ -40,6 +40,15 @@ data class ControlUiState(
     /** Last known playback duration, from daemon-pushed `PlaybackUpdate`s. */
     val durationSeconds: Float? = null,
     /**
+     * Position the user is currently dragging the playback slider to, shown in
+     * place of [positionSeconds] while non-null so the thumb doesn't fight the
+     * position ticking forward underneath the drag. Set on every drag tick and
+     * cleared as soon as the drag finishes, even when no seek command is sent
+     * (e.g. an unparseable host field), so a dropped command can't leave the
+     * thumb frozen at the dragged position.
+     */
+    val seekPositionSeconds: Float? = null,
+    /**
      * Whether the daemon has pushed *any* playback state since this connection
      * was established. False right after connecting (its current state is then
      * genuinely unknown) and while no link exists; lets the screen say so
@@ -58,6 +67,8 @@ fun ControlScreen(
     onSaveHost: () -> Unit,
     onPlayPauseToggle: () -> Unit,
     onStop: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onVolumeChangeFinished: () -> Unit,
     modifier: Modifier = Modifier,
@@ -118,12 +129,12 @@ fun ControlScreen(
 
             val duration = state.durationSeconds
             if (duration != null && duration > 0f) {
-                val position = (state.positionSeconds ?: 0f).coerceIn(0f, duration)
+                val position = (state.seekPositionSeconds ?: state.positionSeconds ?: 0f).coerceIn(0f, duration)
                 Slider(
                     value = position,
-                    onValueChange = {},
+                    onValueChange = onSeek,
+                    onValueChangeFinished = onSeekFinished,
                     valueRange = 0f..duration,
-                    enabled = false,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(

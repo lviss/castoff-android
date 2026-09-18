@@ -21,6 +21,12 @@ class MessagesTest {
     }
 
     @Test
+    fun `seek message serializes the time field`() {
+        val encoded = json.encodeToString(SeekMessage(time = 42.5))
+        assertEquals("""{"time":42.5}""", encoded)
+    }
+
+    @Test
     fun `set volume message serializes the volume field`() {
         val encoded = json.encodeToString(SetVolumeMessage(volume = 0.5))
         assertEquals("""{"volume":0.5}""", encoded)

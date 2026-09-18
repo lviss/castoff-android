@@ -36,11 +36,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Device behaviour here is reproducible without hardware: an AVD named `test_avd` and an Android SDK
   live under `/home/ai/android-sdk-test`, whose `adb-wrapped` and `steam-run`-wrapped `emulator`
   are the NixOS-safe entry points (the raw SDK binaries won't run under the standard dynamic
-  linker). `/home/ai/android-sdk-test/fake_daemon.py` only acks commands and never pushes, so for
+  linker); `steam-run` needs `NIXPKGS_ALLOW_UNFREE=1` in the environment or it refuses to evaluate.
+  `/home/ai/android-sdk-test/fake_daemon.py` only acks commands and never pushes, so for
   connection/push work you need a stand-in that mirrors the daemon's rules -- no push at connect,
   push on state change, ~1/s while playing. `FCastStatusListenerTest` is the committed encoding of
   that contract at the socket level; for UI-level checks, drive the screen with `adb shell input`
-  and assert what it says with `uiautomator dump`.
+  and assert what it says with `uiautomator dump`. A hand-rolled stand-in for UI-level checks can't
+  assume "first accepted connection = the status link": `MainActivity`'s saved-host `DataStore`
+  flow reliably emits once more shortly after the first connect, which restarts the status
+  connection and leaves a fixed first-connection rule permanently pointed at the wrong socket for
+  every connection after that. Classify by behavior instead -- a command connection sends its one
+  frame immediately, while the status link stays silent until its first heartbeat.
 - On NixOS (not GitHub Actions' Ubuntu runners), AAPT2's prebuilt binary won't run under the
   standard dynamic linker (`nix.dev/permalink/stub-ld`). Building locally under Nix needs an
   `-Pandroid.aapt2FromMavenOverride=<path to a wrapper named literally "aapt2">` pointing at a

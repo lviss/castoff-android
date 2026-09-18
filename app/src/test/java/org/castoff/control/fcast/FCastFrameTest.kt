@@ -36,6 +36,15 @@ class FCastFrameTest {
     }
 
     @Test
+    fun `encodes a seek frame with the time field as its body`() {
+        val body = """{"time":42.5}""".toByteArray(Charsets.UTF_8)
+        val encoded = FCastFrame.encode(Opcode.SEEK, body)
+
+        assertEquals(Opcode.SEEK.value, encoded[4].toInt())
+        assertArrayEquals(body, encoded.copyOfRange(5, encoded.size))
+    }
+
+    @Test
     fun `round trips a frame through write and read`() {
         val body = """{"url":"https://example.com/video.mp4"}""".toByteArray(Charsets.UTF_8)
         val output = ByteArrayOutputStream()
