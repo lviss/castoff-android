@@ -36,10 +36,12 @@ import androidx.compose.ui.unit.dp
 
 /**
  * One entry in the play queue list, as shown on the control screen.
- * Deliberately just the URL (matching the daemon's `QueueItemMessage`) --
- * this app has no title/artist/artwork metadata for a queued item.
+ * Mirrors the daemon's `QueueItemMessage`: [title]/[durationSecs] are `null`
+ * until the daemon's background lookup resolves them (or forever, if it
+ * fails or the item isn't a lookup-able URL), and may arrive later via a
+ * `QueueState` push for an item already shown.
  */
-data class QueueItemUi(val url: String)
+data class QueueItemUi(val url: String, val title: String? = null, val durationSecs: Double? = null)
 
 /** UI-only snapshot of what the control screen shows; owned/updated by the caller. */
 data class ControlUiState(
@@ -255,17 +257,28 @@ private fun QueueList(items: List<QueueItemUi>, currentIndex: Int?) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items.size) { index ->
+                val item = items[index]
                 val isCurrent = index == currentIndex
-                Text(
-                    text = items[index].url,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isCurrent) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
+                val color = if (isCurrent) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+                Column {
+                    Text(
+                        text = queueItemDisplayTitle(item),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                        color = color,
+                    )
+                    queueItemDisplayDuration(item)?.let { duration ->
+                        Text(
+                            text = duration,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = color,
+                        )
+                    }
+                }
             }
         }
     }
@@ -308,6 +321,13 @@ private fun ConnectionRow(connection: ConnectionStatus, onConnect: () -> Unit) {
         }
     }
 }
+
+/** The queue row's title text: the daemon-resolved title, or the URL while it's still unresolved. */
+internal fun queueItemDisplayTitle(item: QueueItemUi): String = item.title ?: item.url
+
+/** The queue row's length text (formatted like the playback progress display), or `null` while unresolved. */
+internal fun queueItemDisplayDuration(item: QueueItemUi): String? =
+    item.durationSecs?.let { formatPlaybackTime(it.toFloat()) }
 
 private fun formatPlaybackTime(seconds: Float): String {
     val total = seconds.toInt().coerceAtLeast(0)

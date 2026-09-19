@@ -56,6 +56,23 @@ class MessagesTest {
     }
 
     @Test
+    fun `queue item message deserializes a resolved title and duration when present`() {
+        val decoded = Json.decodeFromString(
+            QueueItemMessage.serializer(),
+            """{"url":"https://a","title":"A Video","durationSecs":125.0}""",
+        )
+        assertEquals("A Video", decoded.title)
+        assertEquals(125.0, decoded.durationSecs)
+    }
+
+    @Test
+    fun `queue item message deserializes a null title and duration when the daemon hasn't resolved them yet`() {
+        val decoded = Json.decodeFromString(QueueItemMessage.serializer(), """{"url":"https://a"}""")
+        assertEquals(null, decoded.title)
+        assertEquals(null, decoded.durationSecs)
+    }
+
+    @Test
     fun `queue state message deserializes a null current index for an empty or unstarted queue`() {
         val decoded = Json.decodeFromString(
             QueueStateMessage.serializer(),
