@@ -57,3 +57,29 @@ data class VolumeUpdateMessage(
 
 @Serializable
 data class PlaybackErrorMessage(val message: String)
+
+/**
+ * castoff private extension: one item in the play queue, as sent by the
+ * daemon in a `QueueState` frame. Mirrors the daemon's `QueueItemMessage`
+ * (daemon/src/fcast.rs) -- deliberately smaller than a `PlayMessage`, since a
+ * queue list only needs enough to display/identify an entry.
+ */
+@Serializable
+data class QueueItemMessage(
+    val url: String,
+    val container: String? = null,
+)
+
+/**
+ * castoff private extension: the full play queue and the sender's position
+ * within it, sent both as `RequestQueue`'s reply and, unprompted, to every
+ * connected sender whenever the queue changes. Mirrors the daemon's
+ * `QueueStateMessage` (daemon/src/fcast.rs).
+ */
+@Serializable
+data class QueueStateMessage(
+    val generationTime: Long,
+    val items: List<QueueItemMessage>,
+    /** Index into [items] of the current item; `null` when the queue is empty or nothing has played yet. */
+    val currentIndex: Int? = null,
+)

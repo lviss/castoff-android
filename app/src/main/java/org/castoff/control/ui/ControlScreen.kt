@@ -6,17 +6,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -25,8 +30,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+
+/**
+ * One entry in the play queue list, as shown on the control screen.
+ * Deliberately just the URL (matching the daemon's `QueueItemMessage`) --
+ * this app has no title/artist/artwork metadata for a queued item.
+ */
+data class QueueItemUi(val url: String)
 
 /** UI-only snapshot of what the control screen shows; owned/updated by the caller. */
 data class ControlUiState(
@@ -55,7 +68,24 @@ data class ControlUiState(
      * instead of looking like a working-but-idle player.
      */
     val hasPlaybackReport: Boolean = false,
-)
+    /** The play queue, in order, from the daemon's most recent `QueueState`. */
+    val queueItems: List<QueueItemUi> = emptyList(),
+    /**
+     * Index into [queueItems] of the current (playing/paused/most-recently-played)
+     * item, straight from the daemon's `QueueState` -- `null` when the queue is
+     * empty or nothing has ever played from it. Next/Previous enablement is
+     * derived from this and [queueItems]' bounds, not guessed from a local count.
+     */
+    val queueCurrentIndex: Int? = null,
+) {
+    /** Whether there is a next queue item to jump forward to. */
+    val canQueueJumpForward: Boolean
+        get() = queueCurrentIndex != null && queueCurrentIndex < queueItems.lastIndex
+
+    /** Whether there is a previous queue item to jump backward to. */
+    val canQueueJumpBackward: Boolean
+        get() = queueCurrentIndex != null && queueCurrentIndex > 0
+}
 
 @Composable
 fun ControlScreen(
@@ -67,6 +97,8 @@ fun ControlScreen(
     onSaveHost: () -> Unit,
     onPlayPauseToggle: () -> Unit,
     onStop: () -> Unit,
+    onQueueJumpBackward: () -> Unit,
+    onQueueJumpForward: () -> Unit,
     onSeek: (Float) -> Unit,
     onSeekFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
@@ -111,6 +143,9 @@ fun ControlScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                IconButton(onClick = onQueueJumpBackward, enabled = state.canQueueJumpBackward) {
+                    Icon(imageVector = Icons.Filled.SkipPrevious, contentDescription = "Previous")
+                }
                 Button(onClick = onPlayPauseToggle) {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
@@ -124,6 +159,9 @@ fun ControlScreen(
                 ) {
                     Icon(imageVector = Icons.Filled.Stop, contentDescription = "Stop")
                     Text("  Stop")
+                }
+                IconButton(onClick = onQueueJumpForward, enabled = state.canQueueJumpForward) {
+                    Icon(imageVector = Icons.Filled.SkipNext, contentDescription = "Next")
                 }
             }
 
@@ -192,8 +230,43 @@ fun ControlScreen(
             }
         }
 
+        if (state.queueItems.isNotEmpty()) {
+            QueueList(items = state.queueItems, currentIndex = state.queueCurrentIndex)
+        }
+
         state.statusMessage?.let { message ->
             Text(text = message, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * The play queue, in order, with the current item bolded so it's
+ * distinguishable from the ones still waiting. Fed live from the daemon's
+ * `QueueState` pushes (`FCastStatusListener.queueUpdates`) plus an initial
+ * `RequestQueue` on connect.
+ */
+@Composable
+private fun QueueList(items: List<QueueItemUi>, currentIndex: Int?) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = "Queue", style = MaterialTheme.typography.titleMedium)
+        LazyColumn(
+            modifier = Modifier.heightIn(max = 240.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            items(items.size) { index ->
+                val isCurrent = index == currentIndex
+                Text(
+                    text = items[index].url,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
         }
     }
 }

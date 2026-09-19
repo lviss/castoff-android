@@ -34,6 +34,21 @@ class FCastClient(private val host: String, private val port: Int = DEFAULT_PORT
 
     suspend fun ping(): Result<Frame?> = sendCommand(Opcode.PING)
 
+    /** castoff private extension: asks for the current play queue; replies with [QueueStateMessage]. */
+    suspend fun requestQueue(): Result<QueueStateMessage> = sendQueueCommand(Opcode.REQUEST_QUEUE)
+
+    /** castoff private extension: moves to the next queue item, if any, and plays it. */
+    suspend fun queueJumpForward(): Result<QueueStateMessage> = sendQueueCommand(Opcode.QUEUE_JUMP_FORWARD)
+
+    /** castoff private extension: moves to the previous queue item, if any, and plays it. */
+    suspend fun queueJumpBackward(): Result<QueueStateMessage> = sendQueueCommand(Opcode.QUEUE_JUMP_BACKWARD)
+
+    private suspend fun sendQueueCommand(opcode: Opcode): Result<QueueStateMessage> =
+        sendCommand(opcode).mapCatching { frame ->
+            val body = requireNotNull(frame?.body) { "expected a QueueState reply to $opcode" }
+            json.decodeFromString(QueueStateMessage.serializer(), body.toString(Charsets.UTF_8))
+        }
+
     private suspend fun sendCommand(opcode: Opcode, jsonBody: String? = null): Result<Frame?> =
         withContext(Dispatchers.IO) {
             runCatching {

@@ -45,6 +45,16 @@ sealed interface StatusEvent {
 
     /** One daemon-pushed `PlaybackUpdate` frame. */
     data class Playback(val update: PlaybackUpdateMessage) : StatusEvent
+
+    /**
+     * One daemon-pushed `QueueState` frame (castoff private extension): sent
+     * unprompted whenever the play queue changes (an add, an auto-advance, or
+     * a jump). This connection never sends `RequestQueue` itself -- see
+     * [FCastStatusListener]'s class doc on why it stays read-only apart from
+     * its heartbeat -- so the initial queue state comes from
+     * [FCastClient.requestQueue] on a short-lived command connection instead.
+     */
+    data class Queue(val state: QueueStateMessage) : StatusEvent
 }
 
 /**
@@ -154,8 +164,8 @@ class FCastStatusListener(
                     val input = socket.getInputStream()
                     while (true) {
                         val frame = FCastFrame.read(input) ?: break
-                        if (frame.opcode == Opcode.PLAYBACK_UPDATE) {
-                            emit(
+                        when (frame.opcode) {
+                            Opcode.PLAYBACK_UPDATE -> emit(
                                 StatusEvent.Playback(
                                     json.decodeFromString(
                                         PlaybackUpdateMessage.serializer(),
@@ -163,6 +173,17 @@ class FCastStatusListener(
                                     ),
                                 ),
                             )
+
+                            Opcode.QUEUE_STATE -> emit(
+                                StatusEvent.Queue(
+                                    json.decodeFromString(
+                                        QueueStateMessage.serializer(),
+                                        frame.body.toString(Charsets.UTF_8),
+                                    ),
+                                ),
+                            )
+
+                            else -> {}
                         }
                     }
                     emit(StatusEvent.Disconnected("Lost connection to $host:$port: the daemon closed it"))
@@ -203,6 +224,14 @@ class FCastStatusListener(
      */
     fun playbackUpdates(): Flow<PlaybackUpdateMessage> =
         events().filterIsInstance<StatusEvent.Playback>().map { it.update }
+
+    /**
+     * [events] reduced to just the daemon's pushed queue-state frames. A fresh
+     * collection opens a fresh connection, so the queue must otherwise be
+     * primed with [FCastClient.requestQueue] on connect.
+     */
+    fun queueUpdates(): Flow<QueueStateMessage> =
+        events().filterIsInstance<StatusEvent.Queue>().map { it.state }
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 5000
