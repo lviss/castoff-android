@@ -59,6 +59,16 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   connection and leaves a fixed first-connection rule permanently pointed at the wrong socket for
   every connection after that. Classify by behavior instead -- a command connection sends its one
   frame immediately, while the status link stays silent until its first heartbeat.
+- `app/build.gradle.kts`'s `signingConfigs { getByName("debug") { ... } }` block only overrides
+  AGP's built-in auto-generated debug key when `ANDROID_DEBUG_KEYSTORE_PATH` /
+  `ANDROID_DEBUG_KEYSTORE_PASSWORD` / `ANDROID_DEBUG_KEY_ALIAS` / `ANDROID_DEBUG_KEY_PASSWORD` are
+  all set; a plain local `./gradlew assembleDebug` still uses Gradle's normal per-machine debug
+  key untouched. `.github/workflows/ci.yml`'s `build` job sets those from the repo secrets
+  `ANDROID_DEBUG_KEYSTORE_BASE64`/`ANDROID_DEBUG_KEYSTORE_PASSWORD`/`ANDROID_DEBUG_KEY_ALIAS`/
+  `ANDROID_DEBUG_KEY_PASSWORD` (the keystore itself only exists as that base64 secret, decoded to
+  `$RUNNER_TEMP` per run -- never commit a keystore file or its passwords to this repo), so every
+  CI-built debug APK signs with the same key and installs as an upgrade over whatever a captain
+  already has installed, instead of needing an uninstall each time.
 - On NixOS (not GitHub Actions' Ubuntu runners), AAPT2's prebuilt binary won't run under the
   standard dynamic linker (`nix.dev/permalink/stub-ld`). Building locally under Nix needs an
   `-Pandroid.aapt2FromMavenOverride=<path to a wrapper named literally "aapt2">` pointing at a
