@@ -27,6 +27,7 @@ import org.castoff.control.fcast.PlaybackAnchor
 import org.castoff.control.fcast.PlaybackDisplay
 import org.castoff.control.fcast.PlaybackReport
 import org.castoff.control.fcast.PlaybackState
+import org.castoff.control.fcast.QueueStateMessage
 import org.castoff.control.fcast.StatusEvent
 import org.castoff.control.fcast.interpolatePosition
 import org.castoff.control.fcast.playbackDisplayFor
@@ -34,6 +35,7 @@ import org.castoff.control.settings.HostSettings
 import org.castoff.control.ui.ConnectionStatus
 import org.castoff.control.ui.ControlScreen
 import org.castoff.control.ui.ControlUiState
+import org.castoff.control.ui.QueueItemUi
 import org.castoff.control.ui.theme.CastoffControlTheme
 
 /** How often the displayed position ticks between daemon-pushed `PlaybackUpdate`s. */
@@ -117,6 +119,31 @@ class MainActivity : ComponentActivity() {
                         uiState = uiState.copy(isPlaying = false, hasPlaybackReport = false)
                     }
 
+                    // The queue, like playback state, cannot be trusted to still be
+                    // current once the link drops or the host changes -- a fresh
+                    // connection reloads it via RequestQueue rather than keeping the
+                    // previous link's list on screen.
+                    var lastQueueGenerationTime by remember { mutableStateOf<Long?>(null) }
+                    fun resetQueue() {
+                        lastQueueGenerationTime = null
+                        uiState = uiState.copy(queueItems = emptyList(), queueCurrentIndex = null)
+                    }
+
+                    // `QueueState` can arrive from either the status connection's
+                    // unprompted pushes or a command connection's RequestQueue/jump
+                    // reply, with no ordering guarantee between the two. Drop any
+                    // reply older than what's already applied so a slow reply can't
+                    // clobber a push that raced ahead of it.
+                    fun applyQueueState(state: QueueStateMessage) {
+                        val last = lastQueueGenerationTime
+                        if (last != null && state.generationTime <= last) return
+                        lastQueueGenerationTime = state.generationTime
+                        uiState = uiState.copy(
+                            queueItems = state.items.map { QueueItemUi(it.url) },
+                            queueCurrentIndex = state.currentIndex,
+                        )
+                    }
+
                     // Persistent status connection. Restarts on a new saved host
                     // (every Save) and on reconnectToken (manual Connect, or a return
                     // to the foreground). Each restart begins from "we know nothing
@@ -128,6 +155,7 @@ class MainActivity : ComponentActivity() {
                         if (host == null || !host.isConfigured) {
                             connection = ConnectionStatus.notConfigured
                             resetLivePlayback()
+                            resetQueue()
                             uiState = uiState.copy(
                                 positionSeconds = null,
                                 durationSeconds = null,
@@ -136,17 +164,30 @@ class MainActivity : ComponentActivity() {
                         }
 
                         resetLivePlayback()
+                        resetQueue()
                         connection = ConnectionStatus.connecting(host.address, host.port)
 
                         FCastStatusListener(host.address, host.port).events().collect { event ->
                             when (event) {
                                 StatusEvent.Connecting -> {
                                     resetLivePlayback()
+                                    resetQueue()
                                     connection = ConnectionStatus.connecting(host.address, host.port)
                                 }
 
-                                StatusEvent.Connected ->
+                                StatusEvent.Connected -> {
                                     connection = ConnectionStatus.connected(host.address, host.port)
+                                    // The status connection stays read-only apart from its
+                                    // heartbeat (see FCastStatusListener's doc), so the
+                                    // initial queue -- unlike playback, which the daemon
+                                    // never reports until its next change -- is fetched
+                                    // once via RequestQueue on a short-lived command
+                                    // connection instead.
+                                    launch {
+                                        FCastClient(host.address, host.port).requestQueue()
+                                            .onSuccess { applyQueueState(it) }
+                                    }
+                                }
 
                                 is StatusEvent.Disconnected -> {
                                     connection = ConnectionStatus.notConnected(
@@ -155,6 +196,7 @@ class MainActivity : ComponentActivity() {
                                         event.reason,
                                     )
                                     resetLivePlayback()
+                                    resetQueue()
                                 }
 
                                 is StatusEvent.Playback -> {
@@ -172,6 +214,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                 }
+
+                                is StatusEvent.Queue -> applyQueueState(event.state)
                             }
                         }
                     }
@@ -264,6 +308,32 @@ class MainActivity : ComponentActivity() {
                                                 current = currentPlaybackDisplay(),
                                             )
                                         )
+                                        uiState.copy(statusMessage = null)
+                                    },
+                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                )
+                            }
+                        },
+                        onQueueJumpBackward = {
+                            val client = clientOrNull() ?: return@ControlScreen
+                            scope.launch {
+                                val result = client.queueJumpBackward()
+                                uiState = result.fold(
+                                    onSuccess = { state ->
+                                        applyQueueState(state)
+                                        uiState.copy(statusMessage = null)
+                                    },
+                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                )
+                            }
+                        },
+                        onQueueJumpForward = {
+                            val client = clientOrNull() ?: return@ControlScreen
+                            scope.launch {
+                                val result = client.queueJumpForward()
+                                uiState = result.fold(
+                                    onSuccess = { state ->
+                                        applyQueueState(state)
                                         uiState.copy(statusMessage = null)
                                     },
                                     onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },

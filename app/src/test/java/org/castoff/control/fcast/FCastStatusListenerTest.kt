@@ -91,6 +91,51 @@ class FCastStatusListenerTest {
     }
 
     @Test
+    fun `reports a pushed QueueState frame as a Queue event`() = runBlocking {
+        val server = ServerSocket(0)
+        val queueBody =
+            """{"generationTime":1,"items":[{"url":"https://a"},{"url":"https://b"}],"currentIndex":0}"""
+        val serverJob = launch(Dispatchers.IO) {
+            val socket = server.accept()
+            FCastFrame.write(socket.getOutputStream(), Opcode.QUEUE_STATE, queueBody.toByteArray())
+            delay(10_000)
+        }
+
+        val events = withTimeout(5000) { listenerFor(server).events().take(3).toList() }
+
+        assertEquals(StatusEvent.Connecting, events[0])
+        assertEquals(StatusEvent.Connected, events[1])
+        val state = (events[2] as StatusEvent.Queue).state
+        assertEquals(2, state.items.size)
+        assertEquals("https://a", state.items[0].url)
+        assertEquals(0, state.currentIndex)
+
+        serverJob.cancel()
+        server.close()
+    }
+
+    @Test
+    fun `queueUpdates convenience emits only queue-state frames`() = runBlocking {
+        val server = ServerSocket(0)
+        val queueBody = """{"generationTime":1,"items":[{"url":"https://a"}],"currentIndex":0}"""
+        val serverJob = launch(Dispatchers.IO) {
+            val socket = server.accept()
+            val out = socket.getOutputStream()
+            FCastFrame.write(out, Opcode.PONG)
+            FCastFrame.write(out, Opcode.QUEUE_STATE, queueBody.toByteArray())
+            delay(10_000)
+        }
+
+        val state = withTimeout(5000) { listenerFor(server).queueUpdates().take(1).toList() }.single()
+
+        assertEquals(1, state.items.size)
+        assertEquals("https://a", state.items[0].url)
+
+        serverJob.cancel()
+        server.close()
+    }
+
+    @Test
     fun `a refused connection is reported in plain language, naming the host`() = runBlocking {
         val port = ServerSocket(0).use { it.localPort } // free the port so nothing is listening
         val listener = FCastStatusListener(

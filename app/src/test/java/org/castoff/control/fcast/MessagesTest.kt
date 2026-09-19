@@ -40,4 +40,28 @@ class MessagesTest {
         )
         assertEquals(PlaybackState.PLAYING, PlaybackState.fromInt(decoded.state))
     }
+
+    @Test
+    fun `queue state message deserializes items and current index from the daemon's shape`() {
+        val decoded = Json.decodeFromString(
+            QueueStateMessage.serializer(),
+            """{"generationTime":1234,"items":[{"url":"https://a"},{"url":"https://b","container":"video/mp4"}],"currentIndex":1}""",
+        )
+        assertEquals(2, decoded.items.size)
+        assertEquals("https://a", decoded.items[0].url)
+        assertEquals(null, decoded.items[0].container)
+        assertEquals("https://b", decoded.items[1].url)
+        assertEquals("video/mp4", decoded.items[1].container)
+        assertEquals(1, decoded.currentIndex)
+    }
+
+    @Test
+    fun `queue state message deserializes a null current index for an empty or unstarted queue`() {
+        val decoded = Json.decodeFromString(
+            QueueStateMessage.serializer(),
+            """{"generationTime":1234,"items":[]}""",
+        )
+        assertEquals(emptyList<QueueItemMessage>(), decoded.items)
+        assertEquals(null, decoded.currentIndex)
+    }
 }

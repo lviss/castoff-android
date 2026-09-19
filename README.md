@@ -31,6 +31,12 @@ external wire protocol, not something that needs monorepo coupling, and the tool
 - A Share-intent receiver: sharing a link (e.g. a YouTube video's "Share" -> "Castoff Control")
   sends an FCast `Play` with that URL to the configured TV box. This is the real Android share
   sheet path, not just something reachable programmatically.
+- A play queue list on the control screen, showing what the daemon has queued in order with the
+  current item highlighted, plus Next/Previous buttons that jump forward/backward in it. Fed live
+  by the daemon's `QueueState` pushes (castoff's private FCast extension, see below) over the same
+  persistent connection the playback progress bar uses, plus an initial fetch on connect since,
+  unlike playback state, the queue can be asked for on demand. Next/Previous disable at either end
+  of the queue based on the daemon's own reported position, not a locally guessed count.
 
 That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist/artwork). See
 [Not yet implemented](#not-yet-implemented-follow-up-work) below for what's planned but not built.
@@ -41,9 +47,10 @@ That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist
   (Material 3).
 - **`app/src/main/java/org/castoff/control/fcast/`** -- the FCast v2 client: wire framing
   (`Frame.kt`), message types (`Messages.kt`, `Opcode.kt`), a small per-command TCP sender
-  (`FCastClient.kt`), a persistent status connection that receives daemon-pushed
-  `PlaybackUpdate` frames and reports its own connection lifecycle (`FCastStatusListener.kt`),
-  and the local position-interpolation rule (`PlaybackPosition.kt`).
+  (`FCastClient.kt`, also used for the queue commands), a persistent status connection that
+  receives daemon-pushed `PlaybackUpdate`/`QueueState` frames and reports its own connection
+  lifecycle (`FCastStatusListener.kt`), and the local position-interpolation rule
+  (`PlaybackPosition.kt`).
 - **`app/src/main/java/org/castoff/control/settings/`** -- `HostSettings.kt`, a DataStore-backed
   store for the user-configured TV box host/port.
 - **`app/src/main/java/org/castoff/control/ui/`** -- the Compose control screen.
@@ -80,6 +87,9 @@ Opcodes this client sends:
 | `Seek` (5) | dragging the control screen's playback progress slider |
 | `SetVolume` (8) | the control screen's volume slider |
 | `Ping` (12) | the status connection's heartbeat, sent on a fixed cadence to tell an idle daemon apart from a dead link |
+| `RequestQueue` (14, private extension) | once, right after the status connection reports `Connected`, to seed the queue list |
+| `QueueJumpForward` (16, private extension) | the control screen's Next button |
+| `QueueJumpBackward` (17, private extension) | the control screen's Previous button |
 
 `SetSpeed` and `Version` are decoded on the wire-format level (see `Opcode.kt`) but not yet wired
 to any UI action.
@@ -87,7 +97,13 @@ to any UI action.
 In the other direction, the client receives the daemon's `PlaybackUpdate` (6) pushes on a
 persistent connection (`FCastStatusListener`) and uses them to drive the progress display above;
 `VolumeUpdate` (7) and `PlaybackError` (9) are decoded on the wire-format level but not acted on
-yet.
+yet. `QueueState` (15, private extension) pushes on that same connection drive the queue list, the
+same push-on-change model `PlaybackUpdate` uses.
+
+Opcodes 14-17 (`RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`) are castoff's
+own private FCast extension for the play queue -- FCast v2 itself has no queue concept -- mirroring
+the daemon's `daemon/src/fcast.rs`; see its README's "Queueing (private extension)" section for the
+full contract (queueing instead of interrupting, auto-advance, persistence across a restart).
 
 ## Building and running
 
@@ -99,7 +115,7 @@ yet.
 ### Build and test from the command line
 
 ```sh
-./gradlew test          # unit tests (FCast framing, messages, playback interpolation)
+./gradlew test          # unit tests (FCast framing, messages, playback interpolation, queue commands)
 ./gradlew assembleDebug  # builds app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -151,8 +167,9 @@ Out of scope for this scaffold, deliberately:
   next step, not done here.
 - **Jellyfin-specific UI.** The daemon doesn't speak Jellyfin yet either -- this app only ever
   sends a bare `url`.
-- **Media browsing** beyond basic transport controls: no library, no queue, and no now-playing
-  metadata (title/artist/artwork). Playback progress is shown now, but the volume slider is still
+- **Media browsing** beyond basic transport controls and the queue list: no library, and no
+  now-playing metadata (title/artist/artwork) for either the current item or queued ones -- the
+  queue list shows raw URLs. Playback progress is shown now, but the volume slider is still
   local-only and doesn't reflect the daemon's `VolumeUpdate`.
 - **A connect-time status request.** FCast v2 (and this daemon) has no "tell me your current
   state" request: a freshly connected sender learns playback state only from the next
