@@ -26,7 +26,20 @@ jobs:
       - name: Unit tests
         run: ./gradlew test --no-daemon
 
+      - name: Decode stable debug keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set +x
+          keystore_path="$RUNNER_TEMP/castoff-debug.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+          echo "ANDROID_DEBUG_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
       - name: Assemble debug APK
+        env:
+          ANDROID_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEYSTORE_PASSWORD }}
+          ANDROID_DEBUG_KEY_ALIAS: ${{ secrets.ANDROID_DEBUG_KEY_ALIAS }}
+          ANDROID_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEY_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Set build identifier

@@ -9,6 +9,28 @@ android {
     namespace = "org.castoff.control"
     compileSdk = 35
 
+    signingConfigs {
+        // AGP pre-populates "debug" with the auto-generated local debug key
+        // (~/.android/debug.keystore). Only override it when a stable keystore's
+        // env vars are actually set (CI, via secrets) so unset vars leave that
+        // default -- and every contributor's/crewmate's local `assembleDebug` --
+        // untouched.
+        getByName("debug") {
+            val keystorePath = System.getenv("ANDROID_DEBUG_KEYSTORE_PATH")
+            val keystorePassword = System.getenv("ANDROID_DEBUG_KEYSTORE_PASSWORD")
+            val alias = System.getenv("ANDROID_DEBUG_KEY_ALIAS")
+            val keyPass = System.getenv("ANDROID_DEBUG_KEY_PASSWORD")
+            if (!keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() &&
+                !alias.isNullOrBlank() && !keyPass.isNullOrBlank()
+            ) {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "org.castoff.control"
         minSdk = 26
