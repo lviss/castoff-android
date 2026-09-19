@@ -36,10 +36,13 @@ external wire protocol, not something that needs monorepo coupling, and the tool
   by the daemon's `QueueState` pushes (castoff's private FCast extension, see below) over the same
   persistent connection the playback progress bar uses, plus an initial fetch on connect since,
   unlike playback state, the queue can be asked for on demand. Next/Previous disable at either end
-  of the queue based on the daemon's own reported position, not a locally guessed count.
+  of the queue based on the daemon's own reported position, not a locally guessed count. Each row
+  shows the daemon-resolved title and length once its background lookup completes, falling back to
+  the raw URL until then (or forever, if the lookup fails or the URL isn't lookup-able).
 
-That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist/artwork). See
-[Not yet implemented](#not-yet-implemented-follow-up-work) below for what's planned but not built.
+That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist/artwork) for the
+currently playing item. See [Not yet implemented](#not-yet-implemented-follow-up-work) below for
+what's planned but not built.
 
 ## What's here
 
@@ -168,9 +171,11 @@ Out of scope for this scaffold, deliberately:
 - **Jellyfin-specific UI.** The daemon doesn't speak Jellyfin yet either -- this app only ever
   sends a bare `url`.
 - **Media browsing** beyond basic transport controls and the queue list: no library, and no
-  now-playing metadata (title/artist/artwork) for either the current item or queued ones -- the
-  queue list shows raw URLs. Playback progress is shown now, but the volume slider is still
-  local-only and doesn't reflect the daemon's `VolumeUpdate`.
+  now-playing metadata (title/artist/artwork) for the currently playing item -- the queue list
+  does show the daemon-resolved title/length per item (see above), but the "Playback" section
+  above it has no equivalent for the current item, only its progress time. Playback progress is
+  shown now, but the volume slider is still local-only and doesn't reflect the daemon's
+  `VolumeUpdate`.
 - **A connect-time status request.** FCast v2 (and this daemon) has no "tell me your current
   state" request: a freshly connected sender learns playback state only from the next
   `PlaybackUpdate`, which the daemon sends on a state change and about once a second while playing.

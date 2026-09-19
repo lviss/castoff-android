@@ -139,7 +139,9 @@ class MainActivity : ComponentActivity() {
                         if (last != null && state.generationTime <= last) return
                         lastQueueGenerationTime = state.generationTime
                         uiState = uiState.copy(
-                            queueItems = state.items.map { QueueItemUi(it.url) },
+                            queueItems = state.items.map {
+                                QueueItemUi(url = it.url, title = it.title, durationSecs = it.durationSecs)
+                            },
                             queueCurrentIndex = state.currentIndex,
                         )
                     }

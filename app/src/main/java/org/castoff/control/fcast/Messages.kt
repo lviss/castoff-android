@@ -68,6 +68,10 @@ data class PlaybackErrorMessage(val message: String)
 data class QueueItemMessage(
     val url: String,
     val container: String? = null,
+    /** Resolved by the daemon's background lookup; `null` until resolved, or forever if it fails. */
+    val title: String? = null,
+    /** Resolved by the daemon's background lookup, in seconds; `null` until resolved, or forever if it fails. */
+    val durationSecs: Double? = null,
 )
 
 /**
