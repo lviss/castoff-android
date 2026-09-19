@@ -123,11 +123,21 @@ class MainActivity : ComponentActivity() {
                     // current once the link drops or the host changes -- a fresh
                     // connection reloads it via RequestQueue rather than keeping the
                     // previous link's list on screen.
+                    var lastQueueGenerationTime by remember { mutableStateOf<Long?>(null) }
                     fun resetQueue() {
+                        lastQueueGenerationTime = null
                         uiState = uiState.copy(queueItems = emptyList(), queueCurrentIndex = null)
                     }
 
+                    // `QueueState` can arrive from either the status connection's
+                    // unprompted pushes or a command connection's RequestQueue/jump
+                    // reply, with no ordering guarantee between the two. Drop any
+                    // reply older than what's already applied so a slow reply can't
+                    // clobber a push that raced ahead of it.
                     fun applyQueueState(state: QueueStateMessage) {
+                        val last = lastQueueGenerationTime
+                        if (last != null && state.generationTime <= last) return
+                        lastQueueGenerationTime = state.generationTime
                         uiState = uiState.copy(
                             queueItems = state.items.map { QueueItemUi(it.url) },
                             queueCurrentIndex = state.currentIndex,
@@ -173,7 +183,7 @@ class MainActivity : ComponentActivity() {
                                     // never reports until its next change -- is fetched
                                     // once via RequestQueue on a short-lived command
                                     // connection instead.
-                                    scope.launch {
+                                    launch {
                                         FCastClient(host.address, host.port).requestQueue()
                                             .onSuccess { applyQueueState(it) }
                                     }
