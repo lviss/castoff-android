@@ -342,6 +342,32 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         },
+                        onClearQueue = {
+                            val client = clientOrNull() ?: return@ControlScreen
+                            scope.launch {
+                                val result = client.clearQueue()
+                                uiState = result.fold(
+                                    onSuccess = { state ->
+                                        applyQueueState(state)
+                                        uiState.copy(statusMessage = null)
+                                    },
+                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                )
+                            }
+                        },
+                        onQueueItemClick = { index ->
+                            val client = clientOrNull() ?: return@ControlScreen
+                            scope.launch {
+                                val result = client.queueJumpToIndex(index)
+                                uiState = result.fold(
+                                    onSuccess = { state ->
+                                        applyQueueState(state)
+                                        uiState.copy(statusMessage = null)
+                                    },
+                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                )
+                            }
+                        },
                         onSeek = { uiState = uiState.copy(seekPositionSeconds = it) },
                         onSeekFinished = {
                             val target = uiState.seekPositionSeconds

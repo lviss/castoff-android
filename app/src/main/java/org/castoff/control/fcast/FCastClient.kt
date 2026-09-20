@@ -43,8 +43,15 @@ class FCastClient(private val host: String, private val port: Int = DEFAULT_PORT
     /** castoff private extension: moves to the previous queue item, if any, and plays it. */
     suspend fun queueJumpBackward(): Result<QueueStateMessage> = sendQueueCommand(Opcode.QUEUE_JUMP_BACKWARD)
 
-    private suspend fun sendQueueCommand(opcode: Opcode): Result<QueueStateMessage> =
-        sendCommand(opcode).mapCatching { frame ->
+    /** castoff private extension: empties the play queue, stopping playback first if it was current. */
+    suspend fun clearQueue(): Result<QueueStateMessage> = sendQueueCommand(Opcode.CLEAR_QUEUE)
+
+    /** castoff private extension: jumps straight to [index] in the queue; a no-op reply if out of range. */
+    suspend fun queueJumpToIndex(index: Int): Result<QueueStateMessage> =
+        sendQueueCommand(Opcode.QUEUE_JUMP_TO_INDEX, json.encodeToString(QueueJumpToIndexMessage(index)))
+
+    private suspend fun sendQueueCommand(opcode: Opcode, jsonBody: String? = null): Result<QueueStateMessage> =
+        sendCommand(opcode, jsonBody).mapCatching { frame ->
             val body = requireNotNull(frame?.body) { "expected a QueueState reply to $opcode" }
             json.decodeFromString(QueueStateMessage.serializer(), body.toString(Charsets.UTF_8))
         }

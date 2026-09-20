@@ -73,6 +73,12 @@ class MessagesTest {
     }
 
     @Test
+    fun `queue jump to index message serializes the index field`() {
+        val encoded = json.encodeToString(QueueJumpToIndexMessage(index = 3))
+        assertEquals("""{"index":3}""", encoded)
+    }
+
+    @Test
     fun `queue state message deserializes a null current index for an empty or unstarted queue`() {
         val decoded = Json.decodeFromString(
             QueueStateMessage.serializer(),
