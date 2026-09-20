@@ -73,7 +73,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   standard dynamic linker (`nix.dev/permalink/stub-ld`). Building locally under Nix needs an
   `-Pandroid.aapt2FromMavenOverride=<path to a wrapper named literally "aapt2">` pointing at a
   script that runs the real aapt2 through an FHS shim (e.g. `steam-run`); GitHub Actions CI needs
-  none of this.
+  none of this. `/home/ai/android-sdk-test/aapt2-wrapper/aapt2` is one such wrapper already set up
+  on this machine (`steam-run` + `build-tools/35.0.0/aapt2`, with `NIXPKGS_ALLOW_UNFREE=1` needed
+  in the environment as noted above) -- pass it straight to the Gradle property above rather than
+  writing a new one, e.g. `./gradlew test -Pandroid.aapt2FromMavenOverride=/home/ai/android-sdk-test/aapt2-wrapper/aapt2`.
 
 ## Maintaining this file
 
