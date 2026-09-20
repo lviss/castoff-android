@@ -33,10 +33,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   change; only while playing does the daemon's ~1/s tick carry a fresh snapshot. The control screen
   therefore resets to "no playback reported yet" on each new connection rather than reusing the
   previous link's state, and never claims to be playing on unknown state.
-- The play queue is castoff's own private FCast extension (opcodes 14-17, beyond FCast v2's
-  reserved 0-13 range: `RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`), hand-
-  ported the same way as the rest of the protocol -- see the daemon's README "Queueing (private
-  extension)" and `daemon/src/fcast.rs` for the authoritative shapes. Unlike `PlaybackUpdate`,
+- The play queue is castoff's own private FCast extension (opcodes 14-19, beyond FCast v2's
+  reserved 0-13 range: `RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`/
+  `ClearQueue`/`QueueJumpToIndex`), hand-ported the same way as the rest of the protocol -- see the
+  daemon's README "Queueing (private extension)" and `daemon/src/fcast.rs` for the authoritative
+  shapes. Unlike `PlaybackUpdate`,
   `RequestQueue` *does* let a client ask for current state on demand, so `MainActivity` fetches the
   initial queue once via `FCastClient.requestQueue()` on a short-lived command connection right
   after the status connection reports `Connected`, rather than waiting for the next push -- the
