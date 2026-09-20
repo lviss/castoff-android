@@ -21,6 +21,34 @@ class MessagesTest {
     }
 
     @Test
+    fun `play message serializes container and url for an uploaded image`() {
+        val encoded = json.encodeToString(
+            PlayMessage(container = "image/png", url = "http://tv-box:46900/images/abc.png"),
+        )
+        assertEquals(
+            """{"container":"image/png","url":"http://tv-box:46900/images/abc.png"}""",
+            encoded,
+        )
+    }
+
+    @Test
+    fun `set image wallpaper message serializes id and wallpaper fields`() {
+        val encoded = json.encodeToString(SetImageWallpaperMessage(id = "abc", wallpaper = true))
+        assertEquals("""{"id":"abc","wallpaper":true}""", encoded)
+    }
+
+    @Test
+    fun `image wallpaper update message deserializes the daemon's confirmation shape`() {
+        val decoded = Json.decodeFromString(
+            ImageWallpaperUpdateMessage.serializer(),
+            """{"generationTime":1234,"id":"abc","wallpaper":false}""",
+        )
+        assertEquals(1234L, decoded.generationTime)
+        assertEquals("abc", decoded.id)
+        assertEquals(false, decoded.wallpaper)
+    }
+
+    @Test
     fun `seek message serializes the time field`() {
         val encoded = json.encodeToString(SeekMessage(time = 42.5))
         assertEquals("""{"time":42.5}""", encoded)

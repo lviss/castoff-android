@@ -3,8 +3,8 @@
 Native Kotlin Android control app for [castoff](https://github.com/lviss/castoff): an open-source,
 appliance-like Chromecast/Roku alternative for a boat. This repo contains the first working
 scaffold: a control screen for playback on the TV box, and an Android "Share" intent receiver so
-sharing a link from another app (e.g. YouTube) casts it. Nothing else exists yet -- see
-[Not yet implemented](#not-yet-implemented-follow-up-work) below.
+sharing a link or image(s) from another app (e.g. YouTube, or a phone photo) casts/uploads it.
+Nothing else exists yet -- see [Not yet implemented](#not-yet-implemented-follow-up-work) below.
 
 This repo is kept deliberately separate from the daemon repo
 ([lviss/castoff](https://github.com/lviss/castoff)): the two only interact over FCast, a fixed
@@ -31,6 +31,12 @@ external wire protocol, not something that needs monorepo coupling, and the tool
 - A Share-intent receiver: sharing a link (e.g. a YouTube video's "Share" -> "Castoff Control")
   sends an FCast `Play` with that URL to the configured TV box. This is the real Android share
   sheet path, not just something reachable programmatically.
+- The same share sheet also accepts one or more images (`ACTION_SEND`/`ACTION_SEND_MULTIPLE` with
+  an `image/*` type). Sharing an image prompts for "Add to queue" (held on screen indefinitely,
+  the same way a shared link stays up until the next Play/queue advance), "Set as wallpaper"
+  (tagged for the daemon's idle-screen rotation), or both. Each image is first uploaded to the
+  daemon's `POST /images` HTTP endpoint (a separate port/transport from FCast, see below), then
+  the returned `{url, container}`/`id` is sent as an ordinary `Play`/`SetImageWallpaper`.
 - A play queue list on the control screen, showing what the daemon has queued in order with the
   current item highlighted, plus Next/Previous buttons that jump forward/backward in it, a button
   to clear the queue, and tapping a row to jump straight to it. Fed live by the daemon's
@@ -59,7 +65,10 @@ what's planned but not built.
   store for the user-configured TV box host/port.
 - **`app/src/main/java/org/castoff/control/ui/`** -- the Compose control screen.
 - **`app/src/main/java/org/castoff/control/share/`** -- `ShareReceiverActivity.kt`, the
-  `ACTION_SEND` handler.
+  `ACTION_SEND`/`ACTION_SEND_MULTIPLE` handler, plus `ImageSharePrompt.kt`'s "add to queue / set as
+  wallpaper" dialog for an image share.
+- **`app/src/main/java/org/castoff/control/upload/`** -- `ImageUploadClient.kt`, the HTTP client
+  for the daemon's `/images` upload endpoint (a separate transport/port from FCast, see below).
 
 ### Why Kotlin + Jetpack Compose
 
@@ -85,7 +94,7 @@ Opcodes this client sends:
 
 | Opcode | Sent when |
 | --- | --- |
-| `Play` (1) | a link is shared to this app via `ACTION_SEND` |
+| `Play` (1) | a link is shared to this app via `ACTION_SEND`, or an uploaded image's `{url, container}` is sent to add it to the queue |
 | `Pause` (2) / `Resume` (3) | the control screen's play/pause toggle |
 | `Stop` (4) | the control screen's stop button |
 | `Seek` (5) | dragging the control screen's playback progress slider |
@@ -96,21 +105,42 @@ Opcodes this client sends:
 | `QueueJumpBackward` (17, private extension) | the control screen's Previous button |
 | `ClearQueue` (18, private extension) | the control screen's clear-queue button |
 | `QueueJumpToIndex` (19, private extension) | tapping an item in the control screen's queue list |
+| `SetImageWallpaper` (20, private extension) | an uploaded image is tagged for idle-screen wallpaper rotation from the image-share prompt |
 
 `SetSpeed` and `Version` are decoded on the wire-format level (see `Opcode.kt`) but not yet wired
-to any UI action.
+to any UI action. `ClearQueue` (18) and `QueueJumpToIndex` (19) are further daemon-side private
+queue opcodes this client doesn't send or decode yet.
 
 In the other direction, the client receives the daemon's `PlaybackUpdate` (6) pushes on a
 persistent connection (`FCastStatusListener`) and uses them to drive the progress display above;
 `VolumeUpdate` (7) and `PlaybackError` (9) are decoded on the wire-format level but not acted on
 yet. `QueueState` (15, private extension) pushes on that same connection drive the queue list, the
-same push-on-change model `PlaybackUpdate` uses.
+same push-on-change model `PlaybackUpdate` uses. `ImageWallpaperUpdate` (21, private extension) is
+`SetImageWallpaper`'s reply, decoded to confirm the tag that was just set.
 
 Opcodes 14-19 (`RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`/`ClearQueue`/
 `QueueJumpToIndex`) are castoff's own private FCast extension for the play queue -- FCast v2 itself
 has no queue concept -- mirroring the daemon's `daemon/src/fcast.rs`; see its README's "Queueing
 (private extension)" section for the full contract (queueing instead of interrupting, auto-advance,
 persistence across a restart).
+Opcodes 20/21 (`SetImageWallpaper`/`ImageWallpaperUpdate`) are a second, separate private
+extension for tagging an uploaded image for idle-screen wallpaper rotation; see "Image sharing"
+below and the daemon README's "Image uploads (private extension)" section.
+
+### Image sharing
+
+Sharing one or more images to this app (`ACTION_SEND`/`ACTION_SEND_MULTIPLE`, `image/*`) prompts
+for "Add to queue" and/or "Set as wallpaper" (`ImageSharePromptDialog` in
+`app/src/main/java/org/castoff/control/share/ImageSharePrompt.kt`), then uploads each image with
+`ImageUploadClient` (`app/src/main/java/org/castoff/control/upload/ImageUploadClient.kt`) to the
+daemon's `POST /images` HTTP endpoint -- a plain local HTTP server on its own port (46900 by
+default, the daemon's `CASTOFF_IMAGE_PORT`-overridable default), deliberately separate from the
+FCast TCP control port since FCast's own frame cap is 32 KiB, nowhere near enough for a phone
+photo. The endpoint replies with `{id, url, container}`: `url`/`container` are sent as-is in an
+FCast `Play` for "Add to queue" (the daemon holds an image queue item indefinitely instead of
+auto-advancing), and `id` is sent in `SetImageWallpaper` for "Set as wallpaper". This app always
+uses port 46900 for uploads; if a daemon operator has overridden `CASTOFF_IMAGE_PORT`, there is no
+in-app setting for it yet (see [Not yet implemented](#not-yet-implemented-follow-up-work)).
 
 ## Building and running
 
@@ -122,7 +152,7 @@ persistence across a restart).
 ### Build and test from the command line
 
 ```sh
-./gradlew test          # unit tests (FCast framing, messages, playback interpolation, queue commands)
+./gradlew test          # unit tests (FCast framing, messages, playback interpolation, queue commands, image upload/share)
 ./gradlew assembleDebug  # builds app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -145,11 +175,17 @@ The easiest way to see it working end-to-end without hardware:
    forward from the daemon's `PlaybackUpdate` pushes; dragging it sends a `Seek` once released.
 5. To test the share path: share a URL to a media file (e.g. long-press a link and choose "Share",
    or share from a browser/YouTube) and pick "Castoff Control" from the share sheet. That sends
-   `Play` with that URL.
+   `Play` with that URL. Sharing one or more images instead (e.g. from the Photos app) prompts for
+   "Add to queue"/"Set as wallpaper" before uploading to the daemon's `/images` endpoint (port
+   46900) and sending the corresponding FCast command(s).
 6. To test manually without a second app, `adb shell am start -a android.intent.action.SEND -t
    text/plain --es android.intent.extra.TEXT "https://example.com/video.mp4" -n
    org.castoff.control/.share.ShareReceiverActivity` triggers the same handler from the command
-   line.
+   line. For the image path, `adb shell am start -a android.intent.action.SEND -t image/png
+   --eu android.intent.extra.STREAM <content-uri-of-an-image> -n
+   org.castoff.control/.share.ShareReceiverActivity` (the URI must be one the shell/app can
+   actually read, e.g. one already on the device's shared storage with a `content://` provider
+   that grants read access).
 
 An emulator can reach a daemon running on the host machine at `10.0.2.2` (the emulator's alias for
 the host loopback interface) if you're running the daemon locally rather than on separate
@@ -188,6 +224,9 @@ Out of scope for this scaffold, deliberately:
   AGENTS.md. Fixing that properly would be a protocol/daemon change, out of scope here.
 - **App signing/release configuration.** Debug builds only; no keystore, no Play Store or F-Droid
   packaging.
+- **A configurable image upload port.** `ImageUploadClient` always uses 46900 (the daemon's
+  default); if an operator sets the daemon's `CASTOFF_IMAGE_PORT` to something else, there is no
+  in-app setting to match it, unlike the FCast control port which `HostSettings` already persists.
 - Anything to do with the daemon repo itself -- this app only ever talks to it over FCast.
 
 ## Credits / prior art

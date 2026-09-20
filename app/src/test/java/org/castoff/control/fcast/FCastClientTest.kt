@@ -107,6 +107,29 @@ class FCastClientTest {
     }
 
     @Test
+    fun `play sends the container alongside the url for an uploaded image`() = runBlocking {
+        val server = ServerSocket(0)
+        val serverJob = launch(Dispatchers.IO) {
+            val socket = server.accept()
+            val frame = FCastFrame.read(socket.getInputStream())
+            assertEquals(Opcode.PLAY, frame?.opcode)
+            assertEquals(
+                """{"container":"image/png","url":"http://tv-box:46900/images/abc.png"}""",
+                frame?.body?.toString(Charsets.UTF_8),
+            )
+            FCastFrame.write(socket.getOutputStream(), Opcode.NONE)
+        }
+
+        val client = FCastClient("127.0.0.1", server.localPort)
+        withTimeout(5000) {
+            client.play(url = "http://tv-box:46900/images/abc.png", container = "image/png")
+        }.getOrThrow()
+
+        serverJob.join()
+        server.close()
+    }
+
+    @Test
     fun `queueJumpToIndex sends a QueueJumpToIndex frame with the index and decodes the QueueState reply`() =
         runBlocking {
             val server = ServerSocket(0)
@@ -122,6 +145,32 @@ class FCastClientTest {
             val state = withTimeout(5000) { client.queueJumpToIndex(0) }.getOrThrow()
 
             assertEquals(1, state.currentIndex)
+
+            serverJob.join()
+            server.close()
+        }
+
+    @Test
+    fun `setImageWallpaper sends a SetImageWallpaper frame and decodes the ImageWallpaperUpdate reply`() =
+        runBlocking {
+            val server = ServerSocket(0)
+            val serverJob = launch(Dispatchers.IO) {
+                val socket = server.accept()
+                val frame = FCastFrame.read(socket.getInputStream())
+                assertEquals(Opcode.SET_IMAGE_WALLPAPER, frame?.opcode)
+                assertEquals(
+                    """{"id":"abc","wallpaper":true}""",
+                    frame?.body?.toString(Charsets.UTF_8),
+                )
+                val replyBody = """{"generationTime":1,"id":"abc","wallpaper":true}"""
+                FCastFrame.write(socket.getOutputStream(), Opcode.IMAGE_WALLPAPER_UPDATE, replyBody.toByteArray())
+            }
+
+            val client = FCastClient("127.0.0.1", server.localPort)
+            val update = withTimeout(5000) { client.setImageWallpaper("abc", true) }.getOrThrow()
+
+            assertEquals("abc", update.id)
+            assertEquals(true, update.wallpaper)
 
             serverJob.join()
             server.close()
