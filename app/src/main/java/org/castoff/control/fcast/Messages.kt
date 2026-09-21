@@ -87,3 +87,11 @@ data class QueueStateMessage(
     /** Index into [items] of the current item; `null` when the queue is empty or nothing has played yet. */
     val currentIndex: Int? = null,
 )
+
+/**
+ * castoff private extension: the queue index a sender wants to jump straight
+ * to, e.g. a tap on an item in the app's queue list. Mirrors the daemon's
+ * `QueueJumpToIndexMessage` (daemon/src/fcast.rs).
+ */
+@Serializable
+data class QueueJumpToIndexMessage(val index: Int)

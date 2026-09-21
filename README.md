@@ -32,13 +32,14 @@ external wire protocol, not something that needs monorepo coupling, and the tool
   sends an FCast `Play` with that URL to the configured TV box. This is the real Android share
   sheet path, not just something reachable programmatically.
 - A play queue list on the control screen, showing what the daemon has queued in order with the
-  current item highlighted, plus Next/Previous buttons that jump forward/backward in it. Fed live
-  by the daemon's `QueueState` pushes (castoff's private FCast extension, see below) over the same
-  persistent connection the playback progress bar uses, plus an initial fetch on connect since,
-  unlike playback state, the queue can be asked for on demand. Next/Previous disable at either end
-  of the queue based on the daemon's own reported position, not a locally guessed count. Each row
-  shows the daemon-resolved title and length once its background lookup completes, falling back to
-  the raw URL until then (or forever, if the lookup fails or the URL isn't lookup-able).
+  current item highlighted, plus Next/Previous buttons that jump forward/backward in it, a button
+  to clear the queue, and tapping a row to jump straight to it. Fed live by the daemon's
+  `QueueState` pushes (castoff's private FCast extension, see below) over the same persistent
+  connection the playback progress bar uses, plus an initial fetch on connect since, unlike
+  playback state, the queue can be asked for on demand. Next/Previous disable at either end of the
+  queue based on the daemon's own reported position, not a locally guessed count. Each row shows
+  the daemon-resolved title and length once its background lookup completes, falling back to the
+  raw URL until then (or forever, if the lookup fails or the URL isn't lookup-able).
 
 That's it: no media browsing, no Jellyfin, no now-playing metadata (title/artist/artwork) for the
 currently playing item. See [Not yet implemented](#not-yet-implemented-follow-up-work) below for
@@ -93,6 +94,8 @@ Opcodes this client sends:
 | `RequestQueue` (14, private extension) | once, right after the status connection reports `Connected`, to seed the queue list |
 | `QueueJumpForward` (16, private extension) | the control screen's Next button |
 | `QueueJumpBackward` (17, private extension) | the control screen's Previous button |
+| `ClearQueue` (18, private extension) | the control screen's clear-queue button |
+| `QueueJumpToIndex` (19, private extension) | tapping an item in the control screen's queue list |
 
 `SetSpeed` and `Version` are decoded on the wire-format level (see `Opcode.kt`) but not yet wired
 to any UI action.
@@ -103,10 +106,11 @@ persistent connection (`FCastStatusListener`) and uses them to drive the progres
 yet. `QueueState` (15, private extension) pushes on that same connection drive the queue list, the
 same push-on-change model `PlaybackUpdate` uses.
 
-Opcodes 14-17 (`RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`) are castoff's
-own private FCast extension for the play queue -- FCast v2 itself has no queue concept -- mirroring
-the daemon's `daemon/src/fcast.rs`; see its README's "Queueing (private extension)" section for the
-full contract (queueing instead of interrupting, auto-advance, persistence across a restart).
+Opcodes 14-19 (`RequestQueue`/`QueueState`/`QueueJumpForward`/`QueueJumpBackward`/`ClearQueue`/
+`QueueJumpToIndex`) are castoff's own private FCast extension for the play queue -- FCast v2 itself
+has no queue concept -- mirroring the daemon's `daemon/src/fcast.rs`; see its README's "Queueing
+(private extension)" section for the full contract (queueing instead of interrupting, auto-advance,
+persistence across a restart).
 
 ## Building and running
 

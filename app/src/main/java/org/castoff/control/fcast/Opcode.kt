@@ -4,7 +4,7 @@ package org.castoff.control.fcast
  * FCast protocol v2 opcodes (docs.fcast.org/protocol/v2), matching the subset
  * implemented by the castoff daemon (daemon/src/fcast.rs in lviss/castoff).
  *
- * Opcodes 14-17 are castoff's own private extension for the play queue (no
+ * Opcodes 14-19 are castoff's own private extension for the play queue (no
  * FCast v2 equivalent), beyond the protocol's reserved 0-13 range -- see the
  * daemon's README "Queueing (private extension)" section and
  * `daemon/src/fcast.rs`.
@@ -27,7 +27,9 @@ enum class Opcode(val value: Int) {
     REQUEST_QUEUE(14),
     QUEUE_STATE(15),
     QUEUE_JUMP_FORWARD(16),
-    QUEUE_JUMP_BACKWARD(17);
+    QUEUE_JUMP_BACKWARD(17),
+    CLEAR_QUEUE(18),
+    QUEUE_JUMP_TO_INDEX(19);
 
     companion object {
         fun fromInt(value: Int): Opcode? = entries.find { it.value == value }

@@ -1,6 +1,7 @@
 package org.castoff.control.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -101,6 +103,8 @@ fun ControlScreen(
     onStop: () -> Unit,
     onQueueJumpBackward: () -> Unit,
     onQueueJumpForward: () -> Unit,
+    onClearQueue: () -> Unit,
+    onQueueItemClick: (Int) -> Unit,
     onSeek: (Float) -> Unit,
     onSeekFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
@@ -233,7 +237,12 @@ fun ControlScreen(
         }
 
         if (state.queueItems.isNotEmpty()) {
-            QueueList(items = state.queueItems, currentIndex = state.queueCurrentIndex)
+            QueueList(
+                items = state.queueItems,
+                currentIndex = state.queueCurrentIndex,
+                onClearQueue = onClearQueue,
+                onItemClick = onQueueItemClick,
+            )
         }
 
         state.statusMessage?.let { message ->
@@ -246,12 +255,26 @@ fun ControlScreen(
  * The play queue, in order, with the current item bolded so it's
  * distinguishable from the ones still waiting. Fed live from the daemon's
  * `QueueState` pushes (`FCastStatusListener.queueUpdates`) plus an initial
- * `RequestQueue` on connect.
+ * `RequestQueue` on connect. Tapping a row jumps straight to it
+ * ([onItemClick]) without disturbing the Next/Previous controls above.
  */
 @Composable
-private fun QueueList(items: List<QueueItemUi>, currentIndex: Int?) {
+private fun QueueList(
+    items: List<QueueItemUi>,
+    currentIndex: Int?,
+    onClearQueue: () -> Unit,
+    onItemClick: (Int) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Queue", style = MaterialTheme.typography.titleMedium)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "Queue", style = MaterialTheme.typography.titleMedium)
+            IconButton(onClick = onClearQueue) {
+                Icon(imageVector = Icons.Filled.ClearAll, contentDescription = "Clear queue")
+            }
+        }
         LazyColumn(
             modifier = Modifier.heightIn(max = 240.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -264,7 +287,7 @@ private fun QueueList(items: List<QueueItemUi>, currentIndex: Int?) {
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 }
-                Column {
+                Column(modifier = Modifier.clickable { onItemClick(index) }) {
                     Text(
                         text = queueItemDisplayTitle(item),
                         style = MaterialTheme.typography.bodyMedium,
