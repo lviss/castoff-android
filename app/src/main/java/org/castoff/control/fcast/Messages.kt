@@ -95,3 +95,27 @@ data class QueueStateMessage(
  */
 @Serializable
 data class QueueJumpToIndexMessage(val index: Int)
+
+/**
+ * castoff private extension: tag or untag a previously uploaded image (by
+ * the `id` the `/images` HTTP upload endpoint returned) for idle-screen
+ * wallpaper rotation. Mirrors the daemon's `SetImageWallpaperMessage`
+ * (daemon/src/fcast.rs).
+ */
+@Serializable
+data class SetImageWallpaperMessage(
+    val id: String,
+    val wallpaper: Boolean,
+)
+
+/**
+ * castoff private extension: `SetImageWallpaper`'s reply, confirming the tag
+ * that was just set. Mirrors the daemon's `ImageWallpaperUpdateMessage`
+ * (daemon/src/fcast.rs).
+ */
+@Serializable
+data class ImageWallpaperUpdateMessage(
+    val generationTime: Long,
+    val id: String,
+    val wallpaper: Boolean,
+)

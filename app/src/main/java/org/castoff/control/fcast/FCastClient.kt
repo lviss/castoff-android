@@ -18,8 +18,8 @@ class FCastClient(private val host: String, private val port: Int = DEFAULT_PORT
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun play(url: String): Result<Frame?> =
-        sendCommand(Opcode.PLAY, json.encodeToString(PlayMessage(url = url)))
+    suspend fun play(url: String, container: String? = null): Result<Frame?> =
+        sendCommand(Opcode.PLAY, json.encodeToString(PlayMessage(container = container, url = url)))
 
     suspend fun pause(): Result<Frame?> = sendCommand(Opcode.PAUSE)
 
@@ -87,6 +87,18 @@ class FCastClient(private val host: String, private val port: Int = DEFAULT_PORT
             return json.decodeFromString(QueueStateMessage.serializer(), frame.body.toString(Charsets.UTF_8))
         }
     }
+
+    /**
+     * castoff private extension: tags or untags an uploaded image (by the
+     * `id` the `/images` HTTP upload endpoint returned) for idle-screen
+     * wallpaper rotation; replies with [ImageWallpaperUpdateMessage].
+     */
+    suspend fun setImageWallpaper(id: String, wallpaper: Boolean): Result<ImageWallpaperUpdateMessage> =
+        sendCommand(Opcode.SET_IMAGE_WALLPAPER, json.encodeToString(SetImageWallpaperMessage(id, wallpaper)))
+            .mapCatching { frame ->
+                val body = requireNotNull(frame?.body) { "expected an ImageWallpaperUpdate reply to SetImageWallpaper" }
+                json.decodeFromString(ImageWallpaperUpdateMessage.serializer(), body.toString(Charsets.UTF_8))
+            }
 
     private suspend fun sendCommand(opcode: Opcode, jsonBody: String? = null): Result<Frame?> =
         withContext(Dispatchers.IO) {

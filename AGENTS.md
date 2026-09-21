@@ -7,7 +7,24 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   [lviss/castoff](https://github.com/lviss/castoff)'s `daemon/src/fcast.rs`. The two repos are
   intentionally separate with no shared code or generated bindings, so a protocol change on the
   daemon side (new opcode, changed field) has to be re-read and re-applied here manually — there is
-  no automated sync or contract test between the repos.
+  no automated sync or contract test between the repos. A daemon PR's own description is not
+  authoritative for opcode numbers: `SetImageWallpaper`/`ImageWallpaperUpdate` shipped as 20/21,
+  not the 18/19 their originating PR description claimed, because 18/19 were already taken by an
+  earlier-merged `ClearQueue`/`QueueJumpToIndex` and got renumbered in a later rebase the
+  description was never updated for. Always read the live value straight from the daemon's
+  `Opcode` enum (see `Opcode.kt`'s doc comment here for the current full picture) before wiring a
+  new opcode.
+- Uploaded images (the Share-intent image path, `app/src/main/java/org/castoff/control/upload/`)
+  travel over a plain HTTP `POST /images` on its own port (46900 by default), not the FCast TCP
+  control port — FCast's own frame cap is 32 KiB, nowhere near enough for a phone photo. Only the
+  resulting `{id, url, container}` crosses into FCast proper (`Play`/`SetImageWallpaper`). See
+  README's "Image sharing" section for the full flow; there is currently no in-app setting for a
+  daemon operator's `CASTOFF_IMAGE_PORT` override, only the hardcoded default. Because that upload
+  and the FCast control port are both plain, unencrypted local traffic to a host/IP the user types
+  in at runtime (`HostSettings`), a static per-host Network Security Config isn't practical --
+  `app/src/main/AndroidManifest.xml`'s `<application>` sets a blanket
+  `android:usesCleartextTraffic="true"` instead, without which Android's default cleartext-traffic
+  block (API 28+) silently fails every upload before any FCast frame is ever sent.
 - `FCastClient` opens a new short-lived TCP connection per command rather than holding one open
   across the app's lifecycle; see the class doc comment in `FCastClient.kt` for why. A separate
   `FCastStatusListener` (same package) holds one persistent connection open instead, because the
