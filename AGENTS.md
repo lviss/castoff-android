@@ -19,7 +19,12 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   control port — FCast's own frame cap is 32 KiB, nowhere near enough for a phone photo. Only the
   resulting `{id, url, container}` crosses into FCast proper (`Play`/`SetImageWallpaper`). See
   README's "Image sharing" section for the full flow; there is currently no in-app setting for a
-  daemon operator's `CASTOFF_IMAGE_PORT` override, only the hardcoded default.
+  daemon operator's `CASTOFF_IMAGE_PORT` override, only the hardcoded default. Because that upload
+  and the FCast control port are both plain, unencrypted local traffic to a host/IP the user types
+  in at runtime (`HostSettings`), a static per-host Network Security Config isn't practical --
+  `app/src/main/AndroidManifest.xml`'s `<application>` sets a blanket
+  `android:usesCleartextTraffic="true"` instead, without which Android's default cleartext-traffic
+  block (API 28+) silently fails every upload before any FCast frame is ever sent.
 - `FCastClient` opens a new short-lived TCP connection per command rather than holding one open
   across the app's lifecycle; see the class doc comment in `FCastClient.kt` for why. A separate
   `FCastStatusListener` (same package) holds one persistent connection open instead, because the

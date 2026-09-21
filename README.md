@@ -140,7 +140,10 @@ photo. The endpoint replies with `{id, url, container}`: `url`/`container` are s
 FCast `Play` for "Add to queue" (the daemon holds an image queue item indefinitely instead of
 auto-advancing), and `id` is sent in `SetImageWallpaper` for "Set as wallpaper". This app always
 uses port 46900 for uploads; if a daemon operator has overridden `CASTOFF_IMAGE_PORT`, there is no
-in-app setting for it yet (see [Not yet implemented](#not-yet-implemented-follow-up-work)).
+in-app setting for it yet (see [Not yet implemented](#not-yet-implemented-follow-up-work)). Both
+that upload endpoint and the FCast control port are plain HTTP/TCP with no TLS, and the host is
+only known at runtime from user input, so a static Network Security Config scoped to one host
+isn't practical -- the manifest instead sets a blanket `android:usesCleartextTraffic="true"`.
 
 ## Building and running
 
