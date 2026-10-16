@@ -52,7 +52,7 @@ fun SettingsScreen(
         Button(onClick = onSaveHost, modifier = Modifier.fillMaxWidth()) {
             Text("Save")
         }
-        state.statusMessage?.let { message ->
+        state.settingsStatusMessage?.let { message ->
             Text(text = message, style = MaterialTheme.typography.bodySmall)
         }
     }

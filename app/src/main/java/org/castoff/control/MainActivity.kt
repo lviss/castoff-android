@@ -59,7 +59,8 @@ class MainActivity : ComponentActivity() {
                                 hostPort = FCastClient.DEFAULT_PORT.toString(),
                                 isPlaying = false,
                                 volume = 0.5f,
-                                statusMessage = null,
+                                playbackStatusMessage = null,
+                                settingsStatusMessage = null,
                             )
                         )
                     }
@@ -260,7 +261,7 @@ class MainActivity : ComponentActivity() {
                         val address = uiState.hostAddress
                         val port = uiState.hostPort.toIntOrNull()
                         if (address.isBlank() || port == null) {
-                            uiState = uiState.copy(statusMessage = "Set a TV host and port first")
+                            uiState = uiState.copy(playbackStatusMessage = "Set a TV host and port first")
                             return null
                         }
                         return FCastClient(address, port)
@@ -276,7 +277,7 @@ class MainActivity : ComponentActivity() {
                             val port = uiState.hostPort.toIntOrNull() ?: FCastClient.DEFAULT_PORT
                             scope.launch {
                                 hostSettings.save(uiState.hostAddress, port)
-                                uiState = uiState.copy(statusMessage = "Saved")
+                                uiState = uiState.copy(settingsStatusMessage = "Saved")
                             }
                         },
                         onPlayPauseToggle = {
@@ -292,9 +293,9 @@ class MainActivity : ComponentActivity() {
                                                 current = currentPlaybackDisplay(),
                                             )
                                         )
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -310,9 +311,9 @@ class MainActivity : ComponentActivity() {
                                                 current = currentPlaybackDisplay(),
                                             )
                                         )
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -323,9 +324,9 @@ class MainActivity : ComponentActivity() {
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -336,9 +337,9 @@ class MainActivity : ComponentActivity() {
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -349,9 +350,9 @@ class MainActivity : ComponentActivity() {
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -362,9 +363,9 @@ class MainActivity : ComponentActivity() {
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -377,8 +378,8 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 val result = client.seek(target.toDouble())
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(statusMessage = null) },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onSuccess = { uiState.copy(playbackStatusMessage = null) },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -389,8 +390,8 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 val result = client.setVolume(volume.toDouble())
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(statusMessage = null) },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onSuccess = { uiState.copy(playbackStatusMessage = null) },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },

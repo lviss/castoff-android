@@ -51,7 +51,10 @@ data class ControlUiState(
     val hostPort: String,
     val isPlaying: Boolean,
     val volume: Float,
-    val statusMessage: String?,
+    /** Feedback from playback/queue commands issued on [ControlScreen], e.g. a failed Play or Seek. */
+    val playbackStatusMessage: String?,
+    /** Feedback from the host/port Save action on [SettingsScreen]. */
+    val settingsStatusMessage: String? = null,
     /** Last known/interpolated playback position, from daemon-pushed `PlaybackUpdate`s. */
     val positionSeconds: Float? = null,
     /** Last known playback duration, from daemon-pushed `PlaybackUpdate`s. */
@@ -226,7 +229,7 @@ fun ControlScreen(
                 )
             }
 
-            state.statusMessage?.let { message ->
+            state.playbackStatusMessage?.let { message ->
                 Text(text = message, style = MaterialTheme.typography.bodySmall)
             }
         }
