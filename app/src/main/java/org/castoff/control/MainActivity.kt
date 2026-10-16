@@ -32,8 +32,8 @@ import org.castoff.control.fcast.StatusEvent
 import org.castoff.control.fcast.interpolatePosition
 import org.castoff.control.fcast.playbackDisplayFor
 import org.castoff.control.settings.HostSettings
+import org.castoff.control.ui.CastoffApp
 import org.castoff.control.ui.ConnectionStatus
-import org.castoff.control.ui.ControlScreen
 import org.castoff.control.ui.ControlUiState
 import org.castoff.control.ui.QueueItemUi
 import org.castoff.control.ui.theme.CastoffControlTheme
@@ -59,7 +59,8 @@ class MainActivity : ComponentActivity() {
                                 hostPort = FCastClient.DEFAULT_PORT.toString(),
                                 isPlaying = false,
                                 volume = 0.5f,
-                                statusMessage = null,
+                                playbackStatusMessage = null,
+                                settingsStatusMessage = null,
                             )
                         )
                     }
@@ -260,13 +261,13 @@ class MainActivity : ComponentActivity() {
                         val address = uiState.hostAddress
                         val port = uiState.hostPort.toIntOrNull()
                         if (address.isBlank() || port == null) {
-                            uiState = uiState.copy(statusMessage = "Set a TV host and port first")
+                            uiState = uiState.copy(playbackStatusMessage = "Set a TV host and port first")
                             return null
                         }
                         return FCastClient(address, port)
                     }
 
-                    ControlScreen(
+                    CastoffApp(
                         state = uiState,
                         connection = connection,
                         onConnect = { reconnectToken++ },
@@ -276,11 +277,11 @@ class MainActivity : ComponentActivity() {
                             val port = uiState.hostPort.toIntOrNull() ?: FCastClient.DEFAULT_PORT
                             scope.launch {
                                 hostSettings.save(uiState.hostAddress, port)
-                                uiState = uiState.copy(statusMessage = "Saved")
+                                uiState = uiState.copy(settingsStatusMessage = "Saved")
                             }
                         },
                         onPlayPauseToggle = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             val nowPlaying = !uiState.isPlaying
                             scope.launch {
                                 val result = if (nowPlaying) client.resume() else client.pause()
@@ -292,14 +293,14 @@ class MainActivity : ComponentActivity() {
                                                 current = currentPlaybackDisplay(),
                                             )
                                         )
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onStop = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.stop()
                                 uiState = result.fold(
@@ -310,61 +311,61 @@ class MainActivity : ComponentActivity() {
                                                 current = currentPlaybackDisplay(),
                                             )
                                         )
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onQueueJumpBackward = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpBackward()
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onQueueJumpForward = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpForward()
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onClearQueue = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.clearQueue()
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onQueueItemClick = { index ->
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpToIndex(index)
                                 uiState = result.fold(
                                     onSuccess = { state ->
                                         applyQueueState(state)
-                                        uiState.copy(statusMessage = null)
+                                        uiState.copy(playbackStatusMessage = null)
                                     },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
@@ -372,25 +373,25 @@ class MainActivity : ComponentActivity() {
                         onSeekFinished = {
                             val target = uiState.seekPositionSeconds
                             uiState = uiState.copy(seekPositionSeconds = null)
-                            val client = clientOrNull() ?: return@ControlScreen
-                            if (target == null) return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
+                            if (target == null) return@CastoffApp
                             scope.launch {
                                 val result = client.seek(target.toDouble())
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(statusMessage = null) },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onSuccess = { uiState.copy(playbackStatusMessage = null) },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },
                         onVolumeChange = { uiState = uiState.copy(volume = it) },
                         onVolumeChangeFinished = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             val volume = uiState.volume
                             scope.launch {
                                 val result = client.setVolume(volume.toDouble())
                                 uiState = result.fold(
-                                    onSuccess = { uiState.copy(statusMessage = null) },
-                                    onFailure = { e -> uiState.copy(statusMessage = "Error: ${e.message}") },
+                                    onSuccess = { uiState.copy(playbackStatusMessage = null) },
+                                    onFailure = { e -> uiState.copy(playbackStatusMessage = "Error: ${e.message}") },
                                 )
                             }
                         },

@@ -13,21 +13,22 @@ external wire protocol, not something that needs monorepo coupling, and the tool
 
 ## What works today
 
-- A control screen: resume/pause toggle, stop, and a volume slider, all sent as FCast commands to
-  a TV box at a host/port you type in once (persisted locally). No mDNS/auto-discovery yet -- see
-  below.
-- A live playback progress bar on that screen, fed by `PlaybackUpdate` frames the daemon pushes
+- A Control tab: resume/pause toggle, stop, and a volume slider, sent as FCast commands to a TV
+  box at a host/port configured once on its own Settings tab (persisted locally). No
+  mDNS/auto-discovery yet -- see below.
+- A live playback progress bar on the Control tab, fed by `PlaybackUpdate` frames the daemon pushes
   over a persistent connection and interpolated locally between pushes, so it advances
   continuously rather than once a second. Dragging it sends a `Seek` once the drag finishes
   (not on every intermediate tick, the same pattern the volume slider already used), and shows
   the dragged position rather than fighting the live interpolation while the drag is in progress.
-- A connection indicator on that screen that always says whether the app is talking to the TV
-  box (connected / connecting / not connected), with the concrete reason when it isn't and a
-  Connect button for the not-connected case. The status connection is opened automatically on
-  app start with a saved host and replaced on every return to the foreground, so a link the OS
-  or the network silently killed while the app was backgrounded doesn't leave a stale screen.
-  Opening the app while something is already playing therefore shows the playback state and the
-  live progress bar once the daemon's next push arrives (about a second).
+- A connection indicator in a shared top bar, visible on every screen, that always says whether
+  the app is talking to the TV box (connected / connecting / not connected), with the concrete
+  reason when it isn't and a Connect button for the not-connected case. The status connection is
+  opened automatically on app start with a saved host and replaced on every return to the
+  foreground, so a link the OS or the network silently killed while the app was backgrounded
+  doesn't leave a stale screen. Opening the app while something is already playing therefore shows
+  the playback state and the live progress bar once the daemon's next push arrives (about a
+  second).
 - A Share-intent receiver: sharing a link (e.g. a YouTube video's "Share" -> "Castoff Control")
   sends an FCast `Play` with that URL to the configured TV box. This is the real Android share
   sheet path, not just something reachable programmatically.
@@ -37,7 +38,7 @@ external wire protocol, not something that needs monorepo coupling, and the tool
   (tagged for the daemon's idle-screen rotation), or both. Each image is first uploaded to the
   daemon's `POST /images` HTTP endpoint (a separate port/transport from FCast, see below), then
   the returned `{url, container}`/`id` is sent as an ordinary `Play`/`SetImageWallpaper`.
-- A play queue list on the control screen, showing what the daemon has queued in order with the
+- A play queue list on the Control tab, showing what the daemon has queued in order with the
   current item highlighted, plus Next/Previous buttons that jump forward/backward in it, a button
   to clear the queue, and tapping a row to jump straight to it. Fed live by the daemon's
   `QueueState` pushes (castoff's private FCast extension, see below) over the same persistent
@@ -63,7 +64,9 @@ what's planned but not built.
   (`PlaybackPosition.kt`).
 - **`app/src/main/java/org/castoff/control/settings/`** -- `HostSettings.kt`, a DataStore-backed
   store for the user-configured TV box host/port.
-- **`app/src/main/java/org/castoff/control/ui/`** -- the Compose control screen.
+- **`app/src/main/java/org/castoff/control/ui/`** -- the Compose UI: `CastoffApp.kt`'s navigation
+  shell (shared top bar with the connection indicator, bottom nav between tabs) and its two tabs,
+  `ControlScreen.kt` (queue + playback, pinned controls) and `SettingsScreen.kt` (TV box host/port).
 - **`app/src/main/java/org/castoff/control/share/`** -- `ShareReceiverActivity.kt`, the
   `ACTION_SEND`/`ACTION_SEND_MULTIPLE` handler, plus `ImageSharePrompt.kt`'s "add to queue / set as
   wallpaper" dialog for an image share.
@@ -74,10 +77,9 @@ what's planned but not built.
 
 Native Kotlin was the brief from the start (this being the native Android counterpart to the
 daemon's native Rust). Jetpack Compose over classic XML views/fragments for the same reason the
-daemon picked Rust/tokio over a heavier stack: this is a small, mostly single-screen control
-surface, and Compose's declarative model keeps that screen's state (host, volume, play/pause) and
-its FCast side effects easy to follow in one place without a fragment/XML layout/ViewModel
-boilerplate split.
+daemon picked Rust/tokio over a heavier stack: this is a small, few-screen control surface, and
+Compose's declarative model keeps its state (host, volume, play/pause) and FCast side effects easy
+to follow in one place without a fragment/XML layout/ViewModel boilerplate split.
 
 ### Why FCast, and what's implemented
 
@@ -168,14 +170,15 @@ The easiest way to see it working end-to-end without hardware:
    from its dev shell). It listens on `0.0.0.0:46899`.
 2. Open this project in Android Studio and run it on an emulator (API 26+) or a real device on the
    same network/Wi-Fi as the daemon.
-3. On first launch, enter the daemon machine's IP and port `46899` in the control screen and tap
-   Save. The line at the top of the screen then says `Connected to <host>:<port>`; if it says
-   `Not connected` instead, it names the reason (`connection refused` when the daemon isn't
+3. On first launch, switch to the Settings tab, enter the daemon machine's IP and port `46899`,
+   and tap Save. The shared top bar then says `Connected to <host>:<port>` on every tab; if it
+   says `Not connected` instead, it names the reason (`connection refused` when the daemon isn't
    running, `can't resolve that host name` for a typo) and offers a Connect button.
-4. Tap Resume/Pause/Stop or drag the volume slider -- each sends an FCast frame to the daemon; the
-   daemon needs something already loaded (via `Play`) for Resume/Pause/Stop to have an audible
-   effect. Once something is playing, a progress bar with elapsed/total time appears and ticks
-   forward from the daemon's `PlaybackUpdate` pushes; dragging it sends a `Seek` once released.
+4. Switch back to the Control tab. Tap Resume/Pause/Stop or drag the volume slider -- each sends
+   an FCast frame to the daemon; the daemon needs something already loaded (via `Play`) for
+   Resume/Pause/Stop to have an audible effect. Once something is playing, a progress bar with
+   elapsed/total time appears and ticks forward from the daemon's `PlaybackUpdate` pushes;
+   dragging it sends a `Seek` once released.
 5. To test the share path: share a URL to a media file (e.g. long-press a link and choose "Share",
    or share from a browser/YouTube) and pick "Castoff Control" from the share sheet. That sends
    `Play` with that URL. Sharing one or more images instead (e.g. from the Photos app) prompts for

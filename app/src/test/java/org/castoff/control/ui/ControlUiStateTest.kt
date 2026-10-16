@@ -17,7 +17,7 @@ class ControlUiStateTest {
         hostPort = "46899",
         isPlaying = false,
         volume = 0.5f,
-        statusMessage = null,
+        playbackStatusMessage = null,
         queueItems = items.map { QueueItemUi(it) },
         queueCurrentIndex = currentIndex,
     )
