@@ -66,17 +66,34 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Device behaviour here is reproducible without hardware: an AVD named `test_avd` and an Android SDK
   live under `/home/ai/android-sdk-test`, whose `adb-wrapped` and `steam-run`-wrapped `emulator`
   are the NixOS-safe entry points (the raw SDK binaries won't run under the standard dynamic
-  linker); `steam-run` needs `NIXPKGS_ALLOW_UNFREE=1` in the environment or it refuses to evaluate.
+  linker). Both `./gradlew` and `adb-wrapped` need `JAVA_HOME`/`ANDROID_HOME`/`ANDROID_SDK_ROOT`
+  exported first -- none are set by default in this environment. The real FHS-sandboxing
+  `steam-run` binary is not directly in `$PATH` or at a fixed `/nix/store` path; resolve it fresh
+  each session with `NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run --run "which steam-run"` (a
+  stray `/nix/store/*-steam-run` file found by other means can be a non-sandboxing stub that just
+  `exec`s its argument, which still runs the dynamically-linked `emulator` binary straight into
+  the "cannot run dynamically linked executables" error this wrapping exists to avoid). Launch it
+  as `steam-run .../emulator/emulator -avd test_avd -no-window -no-audio -no-boot-anim`, then
+  `adb-wrapped wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1;
+  done'` to block until it's actually usable rather than just "listed".
   `/home/ai/android-sdk-test/fake_daemon.py` only acks commands and never pushes, so for
   connection/push work you need a stand-in that mirrors the daemon's rules -- no push at connect,
-  push on state change, ~1/s while playing. `FCastStatusListenerTest` is the committed encoding of
-  that contract at the socket level; for UI-level checks, drive the screen with `adb shell input`
-  and assert what it says with `uiautomator dump`. A hand-rolled stand-in for UI-level checks can't
-  assume "first accepted connection = the status link": `MainActivity`'s saved-host `DataStore`
-  flow reliably emits once more shortly after the first connect, which restarts the status
-  connection and leaves a fixed first-connection rule permanently pointed at the wrong socket for
-  every connection after that. Classify by behavior instead -- a command connection sends its one
-  frame immediately, while the status link stays silent until its first heartbeat.
+  push on state change, ~1/s while playing. It also only `accept()`s one connection at a time (no
+  threading), so it alone cannot play status link *and* command-connection daemon simultaneously
+  (e.g. answering `RequestQueue` while the persistent status connection is also open) -- a
+  stand-in that needs to do both needs its own thread (or similar) per accepted connection.
+  `FCastStatusListenerTest` is the committed encoding of the push-timing contract at the socket
+  level; for UI-level checks, drive the screen with `adb shell input` and assert what it says with
+  `uiautomator dump` (`adb-wrapped` itself runs inside `steam-run`'s FHS sandbox on the host side,
+  which doesn't bind-mount every host path, so `adb pull` a dump/screenshot into the project
+  worktree rather than an arbitrary host tmp directory, which can fail with a misleading "No such
+  file or directory" even though the target exists outside the sandbox). A hand-rolled
+  stand-in for UI-level checks can't assume "first accepted connection = the status link":
+  `MainActivity`'s saved-host `DataStore` flow reliably emits once more shortly after the first
+  connect, which restarts the status connection and leaves a fixed first-connection rule
+  permanently pointed at the wrong socket for every connection after that. Classify by behavior
+  instead -- a command connection sends its one frame immediately, while the status link stays
+  silent until its first heartbeat.
 - `app/build.gradle.kts`'s `signingConfigs { getByName("debug") { ... } }` block only overrides
   AGP's built-in auto-generated debug key when `ANDROID_DEBUG_KEYSTORE_PATH` /
   `ANDROID_DEBUG_KEYSTORE_PASSWORD` / `ANDROID_DEBUG_KEY_ALIAS` / `ANDROID_DEBUG_KEY_PASSWORD` are

@@ -6,8 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,10 +23,10 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 /**
@@ -91,14 +91,18 @@ data class ControlUiState(
         get() = queueCurrentIndex != null && queueCurrentIndex > 0
 }
 
+/**
+ * The Control tab: the play queue (scrollable, taking whatever vertical space
+ * it's given) with the playback controls pinned below it -- prev/play-pause/
+ * stop/next, seek, volume -- so they stay visible and reachable regardless of
+ * how far the queue is scrolled. The shared connection indicator and the host
+ * settings now live outside this screen (see [org.castoff.control.ui.CastoffApp]
+ * and [SettingsScreen]).
+ */
 @Composable
 fun ControlScreen(
     state: ControlUiState,
     connection: ConnectionStatus,
-    onConnect: () -> Unit,
-    onHostAddressChange: (String) -> Unit,
-    onHostPortChange: (String) -> Unit,
-    onSaveHost: () -> Unit,
     onPlayPauseToggle: () -> Unit,
     onStop: () -> Unit,
     onQueueJumpBackward: () -> Unit,
@@ -111,40 +115,30 @@ fun ControlScreen(
     onVolumeChangeFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Text(text = "Castoff Control", style = MaterialTheme.typography.headlineSmall)
-
-        ConnectionRow(connection = connection, onConnect = onConnect)
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "TV box", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = state.hostAddress,
-                onValueChange = onHostAddressChange,
-                label = { Text("Host or IP") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+    Column(modifier = modifier.fillMaxSize()) {
+        if (state.queueItems.isNotEmpty()) {
+            QueueList(
+                items = state.queueItems,
+                currentIndex = state.queueCurrentIndex,
+                onClearQueue = onClearQueue,
+                onItemClick = onQueueItemClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
             )
-            OutlinedTextField(
-                value = state.hostPort,
-                onValueChange = onHostPortChange,
-                label = { Text("Port") },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(onClick = onSaveHost, modifier = Modifier.fillMaxWidth()) {
-                Text("Save")
-            }
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "Playback", style = MaterialTheme.typography.titleMedium)
+        HorizontalDivider()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -218,10 +212,7 @@ fun ControlScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-        }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "Volume", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                 Slider(
@@ -234,22 +225,14 @@ fun ControlScreen(
                         .padding(start = 8.dp),
                 )
             }
-        }
 
-        if (state.queueItems.isNotEmpty()) {
-            QueueList(
-                items = state.queueItems,
-                currentIndex = state.queueCurrentIndex,
-                onClearQueue = onClearQueue,
-                onItemClick = onQueueItemClick,
-            )
-        }
-
-        state.statusMessage?.let { message ->
-            Text(text = message, style = MaterialTheme.typography.bodySmall)
+            state.statusMessage?.let { message ->
+                Text(text = message, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
+
 
 /**
  * The play queue, in order, with the current item bolded so it's
@@ -264,8 +247,9 @@ private fun QueueList(
     currentIndex: Int?,
     onClearQueue: () -> Unit,
     onItemClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -276,7 +260,7 @@ private fun QueueList(
             }
         }
         LazyColumn(
-            modifier = Modifier.heightIn(max = 240.dp),
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items.size) { index ->
@@ -315,7 +299,7 @@ private fun QueueList(
  * phase states its outcome in words.
  */
 @Composable
-private fun ConnectionRow(connection: ConnectionStatus, onConnect: () -> Unit) {
+internal fun ConnectionRow(connection: ConnectionStatus, onConnect: () -> Unit) {
     val dotColor: Color = when (connection.phase) {
         ConnectionPhase.CONNECTED -> MaterialTheme.colorScheme.primary
         ConnectionPhase.CONNECTING -> MaterialTheme.colorScheme.tertiary

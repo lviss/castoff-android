@@ -32,8 +32,8 @@ import org.castoff.control.fcast.StatusEvent
 import org.castoff.control.fcast.interpolatePosition
 import org.castoff.control.fcast.playbackDisplayFor
 import org.castoff.control.settings.HostSettings
+import org.castoff.control.ui.CastoffApp
 import org.castoff.control.ui.ConnectionStatus
-import org.castoff.control.ui.ControlScreen
 import org.castoff.control.ui.ControlUiState
 import org.castoff.control.ui.QueueItemUi
 import org.castoff.control.ui.theme.CastoffControlTheme
@@ -266,7 +266,7 @@ class MainActivity : ComponentActivity() {
                         return FCastClient(address, port)
                     }
 
-                    ControlScreen(
+                    CastoffApp(
                         state = uiState,
                         connection = connection,
                         onConnect = { reconnectToken++ },
@@ -280,7 +280,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onPlayPauseToggle = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             val nowPlaying = !uiState.isPlaying
                             scope.launch {
                                 val result = if (nowPlaying) client.resume() else client.pause()
@@ -299,7 +299,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onStop = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.stop()
                                 uiState = result.fold(
@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onQueueJumpBackward = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpBackward()
                                 uiState = result.fold(
@@ -330,7 +330,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onQueueJumpForward = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpForward()
                                 uiState = result.fold(
@@ -343,7 +343,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onClearQueue = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.clearQueue()
                                 uiState = result.fold(
@@ -356,7 +356,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onQueueItemClick = { index ->
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             scope.launch {
                                 val result = client.queueJumpToIndex(index)
                                 uiState = result.fold(
@@ -372,8 +372,8 @@ class MainActivity : ComponentActivity() {
                         onSeekFinished = {
                             val target = uiState.seekPositionSeconds
                             uiState = uiState.copy(seekPositionSeconds = null)
-                            val client = clientOrNull() ?: return@ControlScreen
-                            if (target == null) return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
+                            if (target == null) return@CastoffApp
                             scope.launch {
                                 val result = client.seek(target.toDouble())
                                 uiState = result.fold(
@@ -384,7 +384,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onVolumeChange = { uiState = uiState.copy(volume = it) },
                         onVolumeChangeFinished = {
-                            val client = clientOrNull() ?: return@ControlScreen
+                            val client = clientOrNull() ?: return@CastoffApp
                             val volume = uiState.volume
                             scope.launch {
                                 val result = client.setVolume(volume.toDouble())
